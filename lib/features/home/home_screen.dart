@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../dashboard/dashboard_screen.dart';
 import '../vehicles/vehicles_screen.dart';
 import '../profile/profile_screen.dart';
 import '../incidents/request_incident_screen.dart';
@@ -14,6 +15,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
   final _screens = const [
+    DashboardScreen(),
     VehiclesScreen(),
     RequestIncidentScreen(),
     ProfileScreen(),
@@ -36,6 +38,11 @@ class _HomeScreenState extends State<HomeScreen> {
         shadowColor: Colors.black.withOpacity(0.05),
         elevation: 0,
         destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.bar_chart_outlined),
+            selectedIcon: Icon(Icons.bar_chart_rounded),
+            label: 'Dashboard',
+          ),
           NavigationDestination(
             icon: Icon(Icons.directions_car_outlined),
             selectedIcon: Icon(Icons.directions_car_rounded),
