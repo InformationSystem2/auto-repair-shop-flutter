@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../vehicles/vehicles_screen.dart';
 import '../profile/profile_screen.dart';
+import '../incidents/request_incident_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,6 +15,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final _screens = const [
     VehiclesScreen(),
+    RequestIncidentScreen(),
     ProfileScreen(),
   ];
 
@@ -33,13 +35,18 @@ class _HomeScreenState extends State<HomeScreen> {
         surfaceTintColor: Colors.transparent,
         shadowColor: Colors.black.withOpacity(0.05),
         elevation: 0,
-        destinations: [
-          const NavigationDestination(
+        destinations: const [
+          NavigationDestination(
             icon: Icon(Icons.directions_car_outlined),
             selectedIcon: Icon(Icons.directions_car_rounded),
             label: 'Mis Vehículos',
           ),
-          const NavigationDestination(
+          NavigationDestination(
+            icon: Icon(Icons.sos_outlined),
+            selectedIcon: Icon(Icons.sos_rounded),
+            label: 'Auxilio',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.person_outline_rounded),
             selectedIcon: Icon(Icons.person_rounded),
             label: 'Perfil',

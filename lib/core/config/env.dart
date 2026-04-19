@@ -4,11 +4,12 @@ class AppConfig {
   static String get apiUrl =>
       dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000';
 
-  static String get loginEndpoint => '/auth/login';
-  static String get meEndpoint => '/auth/me';
-  static String get clientMeEndpoint => '/clients/me';
-  static String get usersEndpoint => '/users';
-  static String get clientsEndpoint => '/clients';
-  static String get vehiclesEndpoint => '/vehicles';
-
+  static String get loginEndpoint => '/api/auth/login';
+  static String get meEndpoint => '/api/auth/me';
+  static String get clientMeEndpoint => '/api/auth/profile';
+  static String get usersEndpoint => '/api/users';
+  static String get clientsEndpoint => '/api/clients';
+  static String get vehiclesEndpoint => '/api/vehicles';
+  static String get incidentsEndpoint => '/api/incidents';
+  static String get uploadEvidenceEndpoint => '/api/incidents/upload-evidence';
 }
