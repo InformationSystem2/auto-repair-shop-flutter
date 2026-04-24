@@ -44,6 +44,29 @@ class IncidentService {
     }
   }
 
+  Future<Incident?> getIncident(String id) async {
+    try {
+      final response = await _dio.get('${AppConfig.incidentsEndpoint}/$id');
+      return Incident.fromJson(response.data as Map<String, dynamic>);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<bool> addExtraEvidence(String incidentId, List<EvidenceData> evidences) async {
+    try {
+      await _dio.post(
+        '${AppConfig.incidentsEndpoint}/$incidentId/evidence',
+        data: {
+          'evidences': evidences.map((e) => e.toJson()).toList(),
+        },
+      );
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   String _extractError(DioException e) {
     try {
       final data = e.response?.data;
