@@ -6,8 +6,10 @@ class Incident {
   final double? aiConfidence;
   final String? aiSummary;
   final int? estimatedArrivalMin;
+  final double? totalCost;
   final DateTime createdAt;
   final String message;
+  final List<Map<String, String>> evidenceUrls;
 
   Incident({
     required this.id,
@@ -17,8 +19,10 @@ class Incident {
     this.aiConfidence,
     this.aiSummary,
     this.estimatedArrivalMin,
+    this.totalCost,
     required this.createdAt,
     required this.message,
+    this.evidenceUrls = const [],
   });
 
   factory Incident.fromJson(Map<String, dynamic> json) => Incident(
@@ -29,8 +33,13 @@ class Incident {
         aiConfidence: (json['ai_confidence'] as num?)?.toDouble(),
         aiSummary: json['ai_summary'] as String?,
         estimatedArrivalMin: json['estimated_arrival_min'] as int?,
+        totalCost: (json['total_cost'] as num?)?.toDouble(),
         createdAt: DateTime.parse(json['created_at'] as String),
         message: json['message'] as String? ?? '',
+        evidenceUrls: (json['evidence_urls'] as List?)
+                ?.map((e) => Map<String, String>.from(e as Map))
+                .toList() ??
+            [],
       );
 }
 

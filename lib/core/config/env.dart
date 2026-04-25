@@ -12,4 +12,5 @@ class AppConfig {
   static String get vehiclesEndpoint => '/api/vehicles';
   static String get incidentsEndpoint => '/api/incidents';
   static String get uploadEvidenceEndpoint => '/api/incidents/upload-evidence';
+  static String get fcmTokenEndpoint => '/api/auth/fcm-token';
 }

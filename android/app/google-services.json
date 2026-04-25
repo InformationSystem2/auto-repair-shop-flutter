@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "776780812382",
+    "project_id": "project-5ed4e5c6-d00d-4ed4-86c",
+    "storage_bucket": "project-5ed4e5c6-d00d-4ed4-86c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:776780812382:android:915fd8c1b1f8df3631e4cf",
+        "android_client_info": {
+          "package_name": "com.autorepair.auto_repair_shop"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCGIfiGlWSsJEcniQbs5CdZ42ONAaUJ9Ok"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

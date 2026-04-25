@@ -8,6 +8,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers/vehicles_provider.dart';
 import '../../core/models/incident.dart';
 import '../../core/models/vehicle.dart';
 import '../../core/services/incident_service.dart';
@@ -29,18 +31,14 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
   final _descController = TextEditingController();
   final _mapController = MapController();
   final _incidentService = IncidentService();
-  final _vehicleService = VehicleService();
   final _imagePicker = ImagePicker();
   final _audioRecorder = AudioRecorder();
 
-  List<Vehicle> _vehicles = [];
   Vehicle? _selectedVehicle;
-  bool _isLoading = true;
   bool _isSubmitting = false;
   bool _locationReady = false;
   bool _isRecording = false;
   bool _isUploading = false;
-  String? _error;
   double? _lat;
   double? _lng;
 
@@ -49,7 +47,7 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
   @override
   void initState() {
     super.initState();
-    _loadVehicles();
+    _loadInitial();
     _acquireLocation();
   }
 
@@ -95,22 +93,16 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
     }
   }
 
-  Future<void> _loadVehicles() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-    final result = await _vehicleService.getMyVehicles();
-    if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-      if (result.success) {
-        _vehicles = result.vehicles.where((v) => v.isActive).toList();
-        if (_vehicles.isNotEmpty) _selectedVehicle = _vehicles.first;
-      } else {
-        _error = result.message;
-      }
-    });
+  Future<void> _loadInitial() async {
+    final provider = context.read<VehiclesProvider>();
+    if (!provider.hasVehicles) {
+      await provider.loadVehicles();
+    }
+    if (mounted && provider.activeVehicles.isNotEmpty) {
+      setState(() {
+        _selectedVehicle = provider.activeVehicles.first;
+      });
+    }
   }
 
   Future<void> _uploadAndAdd(File file, String type) async {
@@ -224,28 +216,30 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final provider = context.watch<VehiclesProvider>();
+    final vehicles = provider.activeVehicles;
 
-    if (_isLoading) {
+    if (provider.isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('Solicitar Auxilio')),
         body: Center(child: CircularProgressIndicator(color: cs.primary)),
       );
     }
 
-    if (_error != null) {
+    if (provider.error != null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Solicitar Auxilio')),
         body: EmptyState(
           icon: Icons.error_outline_rounded,
           title: 'Error al cargar',
-          subtitle: _error!,
-          onAction: _loadVehicles,
+          subtitle: provider.error!,
+          onAction: () => provider.loadVehicles(),
           actionText: 'Reintentar',
         ),
       );
     }
 
-    if (_vehicles.isEmpty) {
+    if (vehicles.isEmpty) {
       return Scaffold(
         appBar: AppBar(title: const Text('Solicitar Auxilio')),
         body: EmptyState(
@@ -256,6 +250,11 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
           actionText: 'Volver',
         ),
       );
+    }
+
+    // Asegurar que haya un vehículo seleccionado si la lista cambió
+    if (_selectedVehicle == null && vehicles.isNotEmpty) {
+      _selectedVehicle = vehicles.first;
     }
 
     return Scaffold(
@@ -272,7 +271,7 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
               _SectionLabel(text: 'Vehículo', cs: cs),
               const SizedBox(height: 8),
               _VehicleDropdown(
-                vehicles: _vehicles,
+                vehicles: vehicles,
                 selected: _selectedVehicle,
                 cs: cs,
                 onChanged: (v) => setState(() => _selectedVehicle = v),
