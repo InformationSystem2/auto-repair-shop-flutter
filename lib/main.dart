@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'core/services/notification_service.dart';
+import 'core/providers/vehicles_provider.dart';
 import 'core/theme/theme_notifier.dart';
 import 'app.dart';
 
@@ -22,8 +23,11 @@ Future<void> main() async {
   }
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeNotifier(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeNotifier()),
+        ChangeNotifierProvider(create: (_) => VehiclesProvider()),
+      ],
       child: const AutoRepairApp(),
     ),
   );

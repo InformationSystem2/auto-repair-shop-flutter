@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../core/models/vehicle.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../core/providers/vehicles_provider.dart';
 import '../../../core/services/vehicle_service.dart';
 import '../../../core/storage/local_storage.dart';
 import '../../../core/theme/theme_notifier.dart';
@@ -17,33 +18,20 @@ class VehiclesScreen extends StatefulWidget {
 
 class _VehiclesScreenState extends State<VehiclesScreen> {
   final _vehicleService = VehicleService();
-
-  List<Vehicle> _vehicles = [];
-  bool _isLoading = true;
-  String? _error;
+  final _authService = AuthService();
   String? _clientId;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadInitial();
   }
 
-  Future<void> _loadData() async {
-    setState(() { _isLoading = true; _error = null; });
-
-    _clientId = await LocalStorage.getClientId();
-    final result = await _vehicleService.getMyVehicles();
-    if (!mounted) return;
-
-    setState(() {
-      _isLoading = false;
-      if (result.success) {
-        _vehicles = result.vehicles;
-      } else {
-        _error = result.message;
-      }
-    });
+  Future<void> _loadInitial() async {
+    _clientId = await _authService.ensureClientId();
+    if (mounted) {
+      context.read<VehiclesProvider>().loadVehicles();
+    }
   }
 
   void _showSnack(String msg, {bool isError = false}) {
@@ -55,6 +43,16 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   }
 
   Future<void> _openCreateSheet() async {
+    if (_clientId == null || _clientId!.isEmpty) {
+      _clientId = await _authService.ensureClientId();
+    }
+
+    if (!mounted) return;
+    if (_clientId == null || _clientId!.isEmpty) {
+      _showSnack('No se pudo identificar tu cuenta de cliente. Reintenta más tarde.', isError: true);
+      return;
+    }
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -168,21 +166,24 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   }
 
   Widget _buildBody(ColorScheme cs) {
-    if (_isLoading) {
+    final provider = context.watch<VehiclesProvider>();
+    final vehicles = provider.vehicles;
+
+    if (provider.isLoading) {
       return Center(child: CircularProgressIndicator(color: cs.primary));
     }
 
-    if (_error != null) {
+    if (provider.error != null) {
       return EmptyState(
         icon: Icons.error_outline_rounded,
         title: 'Error al cargar',
-        subtitle: _error!,
-        onAction: _loadData,
+        subtitle: provider.error!,
+        onAction: () => provider.loadVehicles(),
         actionText: 'Reintentar',
       );
     }
 
-    if (_vehicles.isEmpty) {
+    if (vehicles.isEmpty) {
       return EmptyState(
         icon: Icons.directions_car_outlined,
         title: 'Sin vehículos registrados',
@@ -194,14 +195,14 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
 
     return RefreshIndicator(
       color: cs.primary,
-      onRefresh: _loadData,
+      onRefresh: () => provider.loadVehicles(),
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
-        itemCount: _vehicles.length,
+        itemCount: vehicles.length,
         itemBuilder: (_, i) => VehicleCard(
-          vehicle: _vehicles[i],
-          onEdit: () => _openEditSheet(_vehicles[i]),
-          onDelete: () => _deleteVehicle(_vehicles[i]),
+          vehicle: vehicles[i],
+          onEdit: () => _openEditSheet(vehicles[i]),
+          onDelete: () => _deleteVehicle(vehicles[i]),
         ),
       ),
     );

@@ -1,8 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers/vehicles_provider.dart';
 import '../../core/models/vehicle.dart';
-import '../../core/services/vehicle_service.dart';
 import '../../core/services/dashboard_service.dart';
 
 // Fixed color palette for vehicle bars and category donut
@@ -31,11 +32,7 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final _vehicleService = VehicleService();
   final _dashboardService = DashboardService();
-
-  List<Vehicle> _vehicles = [];
-  bool _vehiclesLoading = true;
 
   ClientDashboardData? _dashData;
   bool _dashLoading = true;
@@ -48,15 +45,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadAll() async {
-    await Future.wait([_loadVehicles(), _loadDashboard()]);
+    final futures = [
+      _loadDashboard(),
+      context.read<VehiclesProvider>().loadVehicles(),
+    ];
+    await Future.wait(futures);
   }
 
-  Future<void> _loadVehicles() async {
-    final result = await _vehicleService.getMyVehicles();
+  Future<void> _loadDashboard() async {
+    setState(() => _dashLoading = true);
+    final result = await _dashboardService.getClientStats();
     if (!mounted) return;
     setState(() {
-      _vehiclesLoading = false;
-      if (result.success) _vehicles = result.vehicles;
+      _dashLoading = false;
+      if (result.success) {
+        _dashData = result.data;
+        _dashError = null;
+      } else {
+        _dashError = result.message;
+      }
     });
   }
 
@@ -131,7 +138,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isLoading = _dashLoading || _vehiclesLoading;
+    final provider = context.watch<VehiclesProvider>();
+    final vehicles = provider.vehicles;
+    final isLoading = _dashLoading || provider.isLoading;
 
     return RefreshIndicator(
       color: cs.primary,
@@ -220,12 +229,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                   _SectionCard(
                     title: 'Mi Garaje',
-                    subtitle: '${_vehicles.length} vehículo(s) registrado(s)',
+                    subtitle: '${vehicles.length} vehículo(s) registrado(s)',
                     cs: cs,
-                    child: _vehicles.isEmpty
+                    child: vehicles.isEmpty
                         ? _EmptyGarage(cs: cs)
                         : Column(
-                            children: _vehicles
+                            children: vehicles
                                 .take(3)
                                 .map((v) => _GarageItem(vehicle: v, cs: cs))
                                 .toList(),

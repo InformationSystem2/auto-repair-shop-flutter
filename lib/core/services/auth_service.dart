@@ -72,7 +72,16 @@ class AuthService {
     }
   }
 
-  /// Obtiene el client_id desde GET /clients/me y lo persiste localmente.
+  /// Asegura que tengamos un client_id, si no lo tenemos lo busca.
+  Future<String?> ensureClientId() async {
+    String? clientId = await LocalStorage.getClientId();
+    if (clientId != null && clientId.isNotEmpty) return clientId;
+    
+    // Si no está, intentamos buscarlo en el backend
+    await _fetchAndSaveClientId();
+    return await LocalStorage.getClientId();
+  }
+
   Future<void> _fetchAndSaveClientId() async {
     try {
       final response = await _dio.get(AppConfig.clientMeEndpoint);
