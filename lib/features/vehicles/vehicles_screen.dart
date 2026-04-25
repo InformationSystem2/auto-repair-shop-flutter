@@ -8,6 +8,8 @@ import '../../../core/theme/theme_notifier.dart';
 import '../../../shared/widgets/ui.dart';
 import 'widgets/vehicle_card.dart';
 import 'widgets/vehicle_form_sheet.dart';
+import '../../core/models/vehicle.dart';
+
 
 class VehiclesScreen extends StatefulWidget {
   const VehiclesScreen({super.key});
@@ -40,6 +42,10 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
       content: Text(msg),
       backgroundColor: isError ? cs.error : const Color(0xFF22C55E), // logic success color
     ));
+  }
+
+  void _loadData() {
+    context.read<VehiclesProvider>().loadVehicles();
   }
 
   Future<void> _openCreateSheet() async {

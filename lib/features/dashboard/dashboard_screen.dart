@@ -67,21 +67,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  Future<void> _loadDashboard() async {
-    setState(() => _dashLoading = true);
-    final result = await _dashboardService.getClientStats();
-    if (!mounted) return;
-    setState(() {
-      _dashLoading = false;
-      if (result.success) {
-        _dashData = result.data;
-        _dashError = null;
-      } else {
-        _dashError = result.message;
-      }
-    });
-  }
-
   // ── Derived display data ───────────────────────────────────────────────────
 
   List<_VehicleSpend> get _vehicleSpends {
@@ -201,7 +186,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _MetricRow(
                     totalSpent: _dashData?.totalSpent ?? 0,
                     servicesCount: _dashData?.serviceCount ?? 0,
-                    vehicleCount: _dashData?.vehicleCount ?? _vehicles.length,
+                    vehicleCount: _dashData?.vehicleCount ?? vehicles.length,
                     cs: cs,
                   ),
                   const SizedBox(height: 24),
