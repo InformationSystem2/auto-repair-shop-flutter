@@ -3,6 +3,7 @@ import '../config/dio_client.dart';
 import '../config/env.dart';
 import '../models/user.dart';
 import '../storage/local_storage.dart';
+import 'notification_service.dart';
 
 class AuthService {
   final _dio = DioClient.instance.dio;
@@ -32,6 +33,9 @@ class AuthService {
       if (isClient) {
         await _fetchAndSaveClientId();
       }
+
+      // Registrar token FCM ahora que tenemos JWT válido
+      NotificationService().registerToken();
 
       return (success: true, message: 'Bienvenido', user: user);
 

@@ -13,4 +13,6 @@ class AppConfig {
   static String get incidentsEndpoint => '/api/incidents';
   static String get uploadEvidenceEndpoint => '/api/incidents/upload-evidence';
   static String get fcmTokenEndpoint => '/api/auth/fcm-token';
+
+  static String get baseUrl => '$apiUrl/api';
 }

@@ -79,18 +79,18 @@ class NotificationService {
       debugPrint('[FCM] Mensaje en primer plano: ${notification?.title}');
     });
 
-    // 5. Obtener y registrar el FCM token en el backend
-    await _registerToken();
-
-    // 6. Escuchar cambios de token (si el token se refresca)
+    // 5. Escuchar cambios de token (si el token se refresca)
     _messaging.onTokenRefresh.listen((newToken) async {
       debugPrint('[FCM] Token refrescado: $newToken');
       await _sendTokenToBackend(newToken);
     });
+    // Nota: _registerToken() se llama después del login, no aquí,
+    // porque el backend requiere autenticación JWT.
   }
 
-  /// Obtiene el token FCM del dispositivo y lo envía al backend.
-  Future<void> _registerToken() async {
+  /// Obtiene el token FCM y lo registra en el backend.
+  /// Llamar DESPUÉS de que el usuario haya iniciado sesión.
+  Future<void> registerToken() async {
     try {
       final token = Platform.isIOS
           ? await _messaging.getAPNSToken()

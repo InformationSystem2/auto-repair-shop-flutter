@@ -37,6 +37,9 @@ dependencies:
   latlong2: ^0.9.0
   geolocator: ^14.0.0
 
+  # WebView (PayPal checkout)
+  webview_flutter: ^4.4.0
+
   # Media & file handling
   image_picker: ^1.0.0
   path: ^1.8.0
