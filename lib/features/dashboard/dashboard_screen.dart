@@ -6,6 +6,8 @@ import '../../core/providers/vehicles_provider.dart';
 import '../../core/models/vehicle.dart';
 import '../../core/services/dashboard_service.dart';
 
+import '../../core/services/notification_service.dart';
+
 // Fixed color palette for vehicle bars and category donut
 const _kPalette = [
   Color(0xFF6366F1), Color(0xFF22D3EE), Color(0xFFF59E0B),
@@ -33,23 +35,34 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final _dashboardService = DashboardService();
+  final _notificationService = NotificationService();
 
   ClientDashboardData? _dashData;
   bool _dashLoading = true;
   String? _dashError;
+  int _unreadCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadAll();
+    _loadUnreadCount();
   }
 
   Future<void> _loadAll() async {
     final futures = [
       _loadDashboard(),
       context.read<VehiclesProvider>().loadVehicles(),
+      _loadUnreadCount(),
     ];
     await Future.wait(futures);
+  }
+
+  Future<void> _loadUnreadCount() async {
+    final count = await _notificationService.getUnreadCount();
+    if (mounted) {
+      setState(() => _unreadCount = count);
+    }
   }
 
   Future<void> _loadDashboard() async {
@@ -96,6 +109,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final dateStr = '${d.day.toString().padLeft(2, '0')} '
           '${_monthName(d.month)} ${d.year}';
       return _ServiceRecord(
+        id: item.id,
         date: dateStr,
         workshop: item.workshopName,
         type: _catLabel(item.aiCategory),
@@ -154,6 +168,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             ),
+            actions: [
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_outlined),
+                    onPressed: () async {
+                      await Navigator.pushNamed(context, '/notifications');
+                      _loadUnreadCount();
+                    },
+                  ),
+                  if (_unreadCount > 0)
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 12,
+                          minHeight: 12,
+                        ),
+                        child: Text(
+                          '$_unreadCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
           if (isLoading)
             const SliverFillRemaining(
@@ -653,63 +707,72 @@ class _HistoryItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFF),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.05)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFF6366F1).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
+    return GestureDetector(
+      onTap: () {
+        Navigator.pushNamed(
+          context,
+          '/incident-detail',
+          arguments: record.id,
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF8FAFF),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.05)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFF6366F1).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.build_rounded, color: Color(0xFF6366F1), size: 20),
             ),
-            child: const Icon(Icons.build_rounded, color: Color(0xFF6366F1), size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    record.type,
+                    style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurface),
+                  ),
+                  Text(
+                    record.workshop,
+                    style: GoogleFonts.inter(fontSize: 11, color: cs.onSurface.withOpacity(0.5)),
+                  ),
+                  Text(
+                    record.date,
+                    style: GoogleFonts.inter(fontSize: 10, color: cs.onSurface.withOpacity(0.35)),
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  record.type,
-                  style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurface),
+                  '\$${record.amount.toStringAsFixed(0)}',
+                  style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w900, color: cs.onSurface),
                 ),
-                Text(
-                  record.workshop,
-                  style: GoogleFonts.inter(fontSize: 11, color: cs.onSurface.withOpacity(0.5)),
-                ),
-                Text(
-                  record.date,
-                  style: GoogleFonts.inter(fontSize: 10, color: cs.onSurface.withOpacity(0.35)),
-                ),
+                const SizedBox(height: 4),
+                if (record.rating > 0)
+                  Row(
+                    children: List.generate(5, (i) => Icon(
+                      Icons.star_rounded,
+                      size: 12,
+                      color: i < record.rating ? const Color(0xFFFBBF24) : cs.onSurface.withOpacity(0.15),
+                    )),
+                  ),
               ],
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '\$${record.amount.toStringAsFixed(0)}',
-                style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w900, color: cs.onSurface),
-              ),
-              const SizedBox(height: 4),
-              if (record.rating > 0)
-                Row(
-                  children: List.generate(5, (i) => Icon(
-                    Icons.star_rounded,
-                    size: 12,
-                    color: i < record.rating ? const Color(0xFFFBBF24) : cs.onSurface.withOpacity(0.15),
-                  )),
-                ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -739,6 +802,7 @@ class _CategorySpend {
 }
 
 class _ServiceRecord {
+  final String id;
   final String date;
   final String workshop;
   final String type;
@@ -747,6 +811,7 @@ class _ServiceRecord {
   final String status;
 
   const _ServiceRecord({
+    required this.id,
     required this.date, required this.workshop, required this.type,
     required this.amount, required this.rating, required this.status,
   });
