@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import '../config/dio_client.dart';
 import '../config/env.dart';
@@ -48,7 +49,9 @@ class IncidentService {
     try {
       final response = await _dio.get('${AppConfig.incidentsEndpoint}/$id');
       return Incident.fromJson(response.data as Map<String, dynamic>);
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[IncidentService] Error loading incident: $e');
+      debugPrint(stack.toString());
       return null;
     }
   }

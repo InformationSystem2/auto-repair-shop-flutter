@@ -252,9 +252,11 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
       );
     }
 
-    // Asegurar que haya un vehículo seleccionado si la lista cambió
-    if (_selectedVehicle == null && vehicles.isNotEmpty) {
-      _selectedVehicle = vehicles.first;
+    // Asegurar que haya un vehículo válido seleccionado
+    if (vehicles.isNotEmpty) {
+      if (_selectedVehicle == null || !vehicles.contains(_selectedVehicle)) {
+        _selectedVehicle = vehicles.first;
+      }
     }
 
     return Scaffold(
