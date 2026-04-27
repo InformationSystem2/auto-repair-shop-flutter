@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/models/incident.dart';
+import '../../core/services/payment_service.dart';
+import './rating_screen.dart';
+import './components/paypal_webview.dart';
 
 class PaymentScreen extends StatefulWidget {
   final Incident incident;
@@ -15,15 +18,59 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _isProcessing = false;
   bool _isPaid = false;
 
+  final _paymentService = PaymentService();
+
   void _handlePayment() async {
     setState(() => _isProcessing = true);
-    // Simulación de procesamiento
-    await Future.delayed(const Duration(seconds: 3));
+    
+    final result = await _paymentService.createOrder(widget.incident.id);
+    
+    if (!result.success || result.approveUrl == null) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message ?? 'Error al iniciar pago')),
+        );
+      }
+      return;
+    }
+
     if (mounted) {
-      setState(() {
-        _isProcessing = false;
-        _isPaid = true;
-      });
+      // Abrimos el WebView
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => PaypalWebView(
+            approveUrl: result.approveUrl!,
+            returnUrl: "https://auxilio-mecanico.app/payment/success",
+            cancelUrl: "https://auxilio-mecanico.app/payment/cancel",
+            onSuccess: () async {
+              // Al detectar el retorno exitoso, capturamos la orden
+              final captureResult = await _paymentService.captureOrder(result.orderId!);
+              if (mounted) {
+                if (captureResult.success) {
+                  setState(() {
+                    _isProcessing = false;
+                    _isPaid = true;
+                  });
+                } else {
+                  setState(() => _isProcessing = false);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(captureResult.message ?? 'Error al confirmar pago')),
+                  );
+                }
+              }
+            },
+            onCancel: () {
+              if (mounted) {
+                setState(() => _isProcessing = false);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Pago cancelado por el usuario')),
+                );
+              }
+            },
+          ),
+        ),
+      );
     }
   }
 
@@ -32,7 +79,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final cs = Theme.of(context).colorScheme;
 
     if (_isPaid) {
-      return _SuccessView(cs: cs);
+      return _SuccessView(cs: cs, incident: widget.incident);
     }
 
     return Scaffold(
@@ -203,14 +250,14 @@ class _PaymentMethodCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Visa terminada en 4242',
+                  'PayPal / Tarjeta',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 Text(
-                  'Vence 12/26',
+                  'Pago seguro vía PayPal',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: cs.onSurface.withOpacity(0.5),
@@ -228,8 +275,9 @@ class _PaymentMethodCard extends StatelessWidget {
 
 class _SuccessView extends StatelessWidget {
   final ColorScheme cs;
+  final Incident incident;
 
-  const _SuccessView({required this.cs});
+  const _SuccessView({required this.cs, required this.incident});
 
   @override
   Widget build(BuildContext context) {
@@ -251,7 +299,7 @@ class _SuccessView extends StatelessWidget {
             ),
             const SizedBox(height: 32),
             Text(
-              '¡Pago Exitoso!',
+              '¡Pago Completado!',
               style: GoogleFonts.inter(
                 fontSize: 24,
                 fontWeight: FontWeight.w900,
@@ -272,16 +320,22 @@ class _SuccessView extends StatelessWidget {
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
-                onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+                onPressed: () {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => RatingScreen(incidentId: incident.id),
+                    ),
+                  );
+                },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: cs.onSurface,
-                  foregroundColor: cs.surface,
+                  backgroundColor: cs.primary,
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ),
                 child: Text(
-                  'Volver al Inicio',
+                  'Continuar a Calificación',
                   style: GoogleFonts.inter(fontWeight: FontWeight.w700),
                 ),
               ),
