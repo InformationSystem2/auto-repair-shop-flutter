@@ -1,10 +1,15 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../config/dio_client.dart';
 import '../config/env.dart';
+
+import '../../app.dart';
+import 'incident_service.dart';
+import '../../features/incidents/payment_screen.dart';
 
 /// Handler para mensajes recibidos en background (debe ser top-level function)
 @pragma('vm:entry-point')
@@ -87,6 +92,31 @@ class NotificationService {
       debugPrint('[FCM] Token refrescado: $newToken');
       await _sendTokenToBackend(newToken);
     });
+
+    // 7. Handler para cuando se toca la notificación (App abierta en background)
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      _handleMessageTap(message);
+    });
+
+    // 8. Check if app was opened FROM a terminated state via a notification
+    final initialMessage = await _messaging.getInitialMessage();
+    if (initialMessage != null) {
+      _handleMessageTap(initialMessage);
+    }
+  }
+
+  void _handleMessageTap(RemoteMessage message) async {
+    debugPrint('[FCM] Notificación pulsada: ${message.data}');
+    
+    final context = _getNavigatorContext();
+    if (context == null) return;
+
+    // Según pedido del usuario, el clic en el PUSH siempre lleva al listado
+    Navigator.pushNamed(context, '/notifications');
+  }
+
+  BuildContext? _getNavigatorContext() {
+    return AutoRepairApp.navigatorKey.currentContext;
   }
 
   /// Obtiene el token FCM del dispositivo y lo envía al backend.
@@ -117,6 +147,38 @@ class NotificationService {
       debugPrint('[FCM] Token registrado en el backend ✅');
     } on DioException catch (e) {
       debugPrint('[FCM] Error registrando token en backend: ${e.message}');
+    }
+  }
+
+  // --- API Methods ---
+
+  Future<List<dynamic>> getNotifications({int limit = 50}) async {
+    try {
+      final response = await _dio.get('/notifications', queryParameters: {'limit': limit});
+      return response.data;
+    } catch (e) {
+      debugPrint('[FCM] Error fetching notifications: $e');
+      return [];
+    }
+  }
+
+  Future<bool> markAsRead(String notificationId) async {
+    try {
+      await _dio.patch('/notifications/$notificationId/read');
+      return true;
+    } catch (e) {
+      debugPrint('[FCM] Error marking notification as read: $e');
+      return false;
+    }
+  }
+
+  Future<int> getUnreadCount() async {
+    try {
+      final response = await _dio.get('/notifications/unread-count');
+      return response.data['unread_count'] ?? 0;
+    } catch (e) {
+      debugPrint('[FCM] Error getting unread count: $e');
+      return 0;
     }
   }
 }
