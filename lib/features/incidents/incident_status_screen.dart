@@ -8,6 +8,7 @@ import 'package:record/record.dart';
 import '../../core/models/incident.dart';
 import '../../core/services/incident_service.dart';
 import 'payment_screen.dart';
+import 'technician_tracking_screen.dart';
 
 class IncidentStatusScreen extends StatefulWidget {
   final Incident incident;
@@ -24,12 +25,17 @@ class _IncidentStatusScreenState extends State<IncidentStatusScreen> {
   bool _isChecking = false;
   final _audioRecorder = AudioRecorder();
   bool _isRecording = false;
+  bool _navigatedToTracking = false;
 
   @override
   void initState() {
     super.initState();
     _currentIncident = widget.incident;
     _startPolling();
+    // If already assigned when screen opens, go to tracking
+    if (_currentIncident.status == 'ASSIGNED' || _currentIncident.status == 'IN_PROGRESS') {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _goToTracking());
+    }
   }
 
   @override
@@ -61,12 +67,12 @@ class _IncidentStatusScreenState extends State<IncidentStatusScreen> {
         await IncidentService().getIncident(_currentIncident.id);
 
     if (updatedIncident != null && mounted) {
+      final prevStatus = _currentIncident.status;
       setState(() {
         _currentIncident = updatedIncident;
         _isChecking = false;
       });
 
-      // Si se completó, ir a la pantalla de pago
       if (_currentIncident.status == 'COMPLETED') {
         _timer?.cancel();
         Navigator.of(context).pushReplacement(
@@ -74,6 +80,14 @@ class _IncidentStatusScreenState extends State<IncidentStatusScreen> {
             builder: (context) => PaymentScreen(incident: _currentIncident),
           ),
         );
+        return;
+      }
+
+      // Auto-redirect to tracking when technician gets assigned
+      if (!_navigatedToTracking &&
+          prevStatus != 'ASSIGNED' && prevStatus != 'IN_PROGRESS' &&
+          (_currentIncident.status == 'ASSIGNED' || _currentIncident.status == 'IN_PROGRESS')) {
+        _goToTracking();
       }
     } else {
       if (mounted) setState(() => _isChecking = false);
@@ -300,27 +314,70 @@ class _IncidentStatusScreenState extends State<IncidentStatusScreen> {
                   ),
                 ),
               ],
+              // Workshop + Technician assignment card
+              if (_currentIncident.workshopName != null || _currentIncident.technicianName != null) ...[
+                const SizedBox(height: 16),
+                _AssignmentCard(incident: _currentIncident, cs: cs),
+              ],
+
               const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: cs.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+
+              // Track button when in transit
+              if (_currentIncident.status == 'ASSIGNED' || _currentIncident.status == 'IN_PROGRESS') ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _goToTracking,
+                    icon: const Icon(Icons.location_on_rounded),
+                    label: Text(
+                      'Ver técnico en tiempo real',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                   ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil(
+                    '/home', (route) => false,
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
                   child: Text(
-                    'Volver al inicio',
+                    'Ir al inicio',
                     style: GoogleFonts.inter(fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  void _goToTracking() {
+    if (!mounted || _navigatedToTracking) return;
+    _navigatedToTracking = true;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => TechnicianTrackingScreen(
+          incidentId: _currentIncident.id,
+          clientLat: _currentIncident.lat,
+          clientLng: _currentIncident.lng,
+          technicianName: _currentIncident.technicianName,
+          workshopName: _currentIncident.workshopName,
         ),
       ),
     );
@@ -891,5 +948,71 @@ class _InfoRow extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _AssignmentCard extends StatelessWidget {
+  final Incident incident;
+  final ColorScheme cs;
+  const _AssignmentCard({required this.incident, required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Color(0x4D6366F1), blurRadius: 16, offset: Offset(0, 6))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.verified_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Text('Servicio asignado',
+                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700,
+                    color: Colors.white70, letterSpacing: 1)),
+          ]),
+          const SizedBox(height: 16),
+          if (incident.workshopName != null)
+            _AssignRow(icon: Icons.store_rounded, label: 'Taller', value: incident.workshopName!),
+          if (incident.workshopName != null && incident.technicianName != null) const SizedBox(height: 10),
+          if (incident.technicianName != null)
+            _AssignRow(icon: Icons.engineering_rounded, label: 'Técnico', value: incident.technicianName!),
+          if (incident.estimatedArrivalMin != null) ...[
+            const SizedBox(height: 10),
+            _AssignRow(icon: Icons.timer_rounded, label: 'Tiempo estimado',
+                value: '${incident.estimatedArrivalMin} minutos'),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AssignRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _AssignRow({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Icon(icon, color: Colors.white70, size: 18),
+      const SizedBox(width: 10),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: GoogleFonts.inter(fontSize: 10, color: Colors.white54,
+            fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+        Text(value, style: GoogleFonts.inter(fontSize: 15, color: Colors.white,
+            fontWeight: FontWeight.w800)),
+      ]),
+    ]);
   }
 }

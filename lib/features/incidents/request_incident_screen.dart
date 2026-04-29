@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -13,11 +14,12 @@ import '../../core/providers/vehicles_provider.dart';
 import '../../core/models/incident.dart';
 import '../../core/models/vehicle.dart';
 import '../../core/services/incident_service.dart';
-import '../../core/services/vehicle_service.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_text_field.dart';
 import '../../shared/widgets/empty_state.dart';
 import 'incident_status_screen.dart';
+import 'technician_tracking_screen.dart';
+import 'payment_screen.dart';
 
 class RequestIncidentScreen extends StatefulWidget {
   const RequestIncidentScreen({super.key});
@@ -44,15 +46,60 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
 
   final List<EvidenceData> _evidences = [];
 
+  // Active incident tracking
+  Incident? _activeIncident;
+  bool _checkingActive = true;
+  Timer? _pollTimer;
+  String? _lastKnownIncidentId;
+
   @override
   void initState() {
     super.initState();
+    _checkActiveIncident();
     _loadInitial();
     _acquireLocation();
+    // Poll every 5s to detect when workshop completes the service
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _checkActiveIncident();
+    });
+  }
+
+  Future<void> _checkActiveIncident() async {
+    final active = await IncidentService().getMyActiveIncident();
+    if (!mounted) return;
+
+    // Incident existed before and now getMyActiveIncident returns null
+    // → it may have COMPLETED. Fetch it directly to confirm.
+    if (active == null && _lastKnownIncidentId != null) {
+      final finished = await IncidentService().getIncident(_lastKnownIncidentId!);
+      if (!mounted) return;
+      if (finished != null && finished.status == 'COMPLETED') {
+        _pollTimer?.cancel();
+        setState(() {
+          _activeIncident = null;
+          _checkingActive = false;
+          _lastKnownIncidentId = null;
+        });
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => PaymentScreen(incident: finished)),
+        ).then((_) {
+          // After payment flow, refresh to clear any stale state
+          if (mounted) _checkActiveIncident();
+        });
+        return;
+      }
+    }
+
+    setState(() {
+      _lastKnownIncidentId = active?.id ?? _lastKnownIncidentId;
+      _activeIncident = active;
+      _checkingActive = false;
+    });
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _descController.dispose();
     _mapController.dispose();
     _audioRecorder.dispose();
@@ -218,6 +265,23 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
     final cs = Theme.of(context).colorScheme;
     final provider = context.watch<VehiclesProvider>();
     final vehicles = provider.activeVehicles;
+
+    // Show loading while checking for active incident
+    if (_checkingActive) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Auxilio')),
+        body: Center(child: CircularProgressIndicator(color: cs.primary)),
+      );
+    }
+
+    // If there's an active incident, show its status instead of the form
+    if (_activeIncident != null) {
+      return _ActiveIncidentView(
+        incident: _activeIncident!,
+        onRefresh: _checkActiveIncident,
+        cs: cs,
+      );
+    }
 
     if (provider.isLoading) {
       return Scaffold(
@@ -782,3 +846,276 @@ class _LocationMapWidgetState extends State<_LocationMapWidget> {
     );
   }
 }
+
+// ─── Active Incident View ─────────────────────────────────────────────────────
+
+class _ActiveIncidentView extends StatelessWidget {
+  final Incident incident;
+  final VoidCallback onRefresh;
+  final ColorScheme cs;
+
+  const _ActiveIncidentView({
+    required this.incident,
+    required this.onRefresh,
+    required this.cs,
+  });
+
+  bool get _isInTransit =>
+      incident.status == 'ASSIGNED' || incident.status == 'IN_PROGRESS';
+
+  String get _statusLabel {
+    const labels = {
+      'PENDING': 'Pendiente',
+      'ANALYZING': 'Analizando con IA...',
+      'PENDING_INFO': 'Información requerida',
+      'MATCHED': 'Taller asignado',
+      'ASSIGNED': 'Técnico en camino',
+      'IN_PROGRESS': 'En proceso',
+    };
+    return labels[incident.status] ?? incident.status;
+  }
+
+  Color get _statusColor {
+    switch (incident.status) {
+      case 'ASSIGNED':
+      case 'IN_PROGRESS':
+        return const Color(0xFF10B981);
+      case 'MATCHED':
+        return const Color(0xFF6366F1);
+      case 'PENDING_INFO':
+        return const Color(0xFFD97706);
+      default:
+        return cs.primary;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Servicio Activo'),
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: onRefresh,
+            tooltip: 'Actualizar',
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Status banner
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: _statusColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: _statusColor.withOpacity(0.3)),
+              ),
+              child: Column(
+                children: [
+                  if (incident.status == 'PENDING' || incident.status == 'ANALYZING')
+                    CircularProgressIndicator(color: _statusColor, strokeWidth: 3)
+                  else
+                    Icon(
+                      _isInTransit
+                          ? Icons.directions_car_rounded
+                          : Icons.hourglass_top_rounded,
+                      size: 48,
+                      color: _statusColor,
+                    ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _isInTransit ? '¡Tu técnico está en camino!' : 'Solicitud en curso',
+                    style: GoogleFonts.inter(
+                        fontSize: 18, fontWeight: FontWeight.w700, color: _statusColor),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _statusLabel,
+                    style: GoogleFonts.inter(
+                        fontSize: 14, color: _statusColor.withOpacity(0.8)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Workshop + Technician card
+            if (incident.workshopName != null || incident.technicianName != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [
+                    BoxShadow(
+                        color: Color(0x4D6366F1),
+                        blurRadius: 16,
+                        offset: Offset(0, 6))
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.verified_rounded,
+                          color: Colors.white, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'SERVICIO ASIGNADO',
+                        style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white70,
+                            letterSpacing: 1),
+                      ),
+                    ]),
+                    const SizedBox(height: 16),
+                    if (incident.workshopName != null) ...[
+                      Row(children: [
+                        const Icon(Icons.store_rounded,
+                            color: Colors.white70, size: 18),
+                        const SizedBox(width: 10),
+                        Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Taller',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 10,
+                                      color: Colors.white54,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 0.5)),
+                              Text(incident.workshopName!,
+                                  style: GoogleFonts.inter(
+                                      fontSize: 15,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800)),
+                            ]),
+                      ]),
+                    ],
+                    if (incident.workshopName != null &&
+                        incident.technicianName != null)
+                      const SizedBox(height: 12),
+                    if (incident.technicianName != null) ...[
+                      Row(children: [
+                        const Icon(Icons.engineering_rounded,
+                            color: Colors.white70, size: 18),
+                        const SizedBox(width: 10),
+                        Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Técnico',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 10,
+                                      color: Colors.white54,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 0.5)),
+                              Text(incident.technicianName!,
+                                  style: GoogleFonts.inter(
+                                      fontSize: 15,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800)),
+                            ]),
+                      ]),
+                    ],
+                    if (incident.estimatedArrivalMin != null) ...[
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        const Icon(Icons.timer_rounded,
+                            color: Colors.white70, size: 18),
+                        const SizedBox(width: 10),
+                        Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Tiempo estimado',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 10,
+                                      color: Colors.white54,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 0.5)),
+                              Text('${incident.estimatedArrivalMin} minutos',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 15,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800)),
+                            ]),
+                      ]),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            // Go to map button (only when technician is in transit)
+            if (_isInTransit) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => TechnicianTrackingScreen(
+                        incidentId: incident.id,
+                        clientLat: incident.lat,
+                        clientLng: incident.lng,
+                        technicianName: incident.technicianName,
+                        workshopName: incident.workshopName,
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.location_on_rounded),
+                  label: Text(
+                    'Ver técnico en el mapa',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // View detail button
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.of(context)
+                    .push(MaterialPageRoute(
+                      builder: (_) => IncidentStatusScreen(incident: incident),
+                    ))
+                    .then((_) => onRefresh()),
+                icon: const Icon(Icons.info_outline_rounded),
+                label: Text(
+                  'Ver detalle del servicio',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

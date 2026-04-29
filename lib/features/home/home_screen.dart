@@ -14,12 +14,13 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  final _screens = const [
-    DashboardScreen(),
-    VehiclesScreen(),
+  final _screens = [
+    const DashboardScreen(),
+    const VehiclesScreen(),
     RequestIncidentScreen(),
-    ProfileScreen(),
+    const ProfileScreen(),
   ];
+
 
   @override
   Widget build(BuildContext context) {

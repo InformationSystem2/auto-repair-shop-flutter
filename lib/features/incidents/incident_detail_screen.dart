@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/models/incident.dart';
 import '../../core/services/incident_service.dart';
 import '../../shared/widgets/empty_state.dart';
+import 'technician_tracking_screen.dart';
 
 class IncidentDetailScreen extends StatefulWidget {
   final String incidentId;
@@ -179,6 +180,12 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
                     isDark: isDark,
                   ),
                   
+                  // Live technician tracking button
+                  if (incident.status == 'ASSIGNED' || incident.status == 'IN_PROGRESS') ...[
+                    const SizedBox(height: 24),
+                    _TrackingButton(incident: incident, cs: cs),
+                  ],
+
                   if (incident.rating != null) ...[
                     const SizedBox(height: 24),
                     _SectionHeader(title: 'Mi Calificación', icon: Icons.star_rounded, cs: cs),
@@ -365,6 +372,81 @@ class _DetailRow extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _TrackingButton extends StatelessWidget {
+  final Incident incident;
+  final ColorScheme cs;
+  const _TrackingButton({required this.incident, required this.cs});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TechnicianTrackingScreen(
+              incidentId: incident.id,
+              clientLat: incident.lat,
+              clientLng: incident.lng,
+              technicianName: incident.technicianName,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [const Color(0xFF10B981), const Color(0xFF059669)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF10B981).withOpacity(0.35),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.location_on_rounded, color: Colors.white, size: 22),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Ver técnico en tiempo real',
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+                Text(
+                  incident.technicianName != null
+                      ? '${incident.technicianName} está en camino'
+                      : 'Sigue la ubicación del técnico',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: Colors.white.withOpacity(0.8),
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
+          ],
+        ),
+      ),
     );
   }
 }

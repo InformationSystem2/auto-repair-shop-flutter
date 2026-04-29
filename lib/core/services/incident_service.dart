@@ -56,6 +56,16 @@ class IncidentService {
     }
   }
 
+  Future<Incident?> getMyActiveIncident() async {
+    try {
+      final response = await _dio.get('${AppConfig.incidentsEndpoint}/my-active');
+      if (response.data == null) return null;
+      return Incident.fromJson(response.data as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<bool> addExtraEvidence(String incidentId, List<EvidenceData> evidences) async {
     try {
       await _dio.post(
