@@ -222,6 +222,13 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
       return;
     }
 
+    final hasText = _descController.text.trim().isNotEmpty;
+    final hasEvidence = _evidences.isNotEmpty;
+    if (!hasText && !hasEvidence) {
+      _showSnack('Agrega al menos una descripción, imagen o audio', isError: true);
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     final mapCenter = _mapController.camera.center;
@@ -229,7 +236,7 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
     final submitLng = mapCenter.longitude;
 
     final payload = IncidentCreate(
-      description: _descController.text.trim(),
+      description: hasText ? _descController.text.trim() : null,
       vehicleId: _selectedVehicle!.id,
       latitude: submitLat,
       longitude: submitLng,
@@ -345,20 +352,14 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
               const SizedBox(height: 20),
               AppTextField(
                 controller: _descController,
-                label: 'Descripción del problema',
+                label: 'Descripción del problema (opcional)',
                 hint: 'Ej: Mi auto no enciende, hay humo del motor...',
                 maxLines: 4,
                 keyboardType: TextInputType.multiline,
                 textInputAction: TextInputAction.newline,
-                validator: (v) {
-                  if (v == null || v.trim().length < 10) {
-                    return 'Describe el problema (mínimo 10 caracteres)';
-                  }
-                  return null;
-                },
               ),
               const SizedBox(height: 20),
-              _SectionLabel(text: 'Evidencias (Opcional)', cs: cs),
+              _SectionLabel(text: 'Evidencias (opcional)', cs: cs),
               const SizedBox(height: 8),
               _EvidenceWidget(
                 evidences: _evidences,
@@ -441,7 +442,7 @@ class _EmergencyBanner extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Describe tu problema con el mayor detalle posible.',
+                  'Envía texto, imagen o audio — al menos uno es requerido.',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: const Color(0xFFDC2626).withOpacity(0.8),
