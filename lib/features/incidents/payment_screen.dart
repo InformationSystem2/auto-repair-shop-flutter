@@ -281,68 +281,206 @@ class _SuccessView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final dateStr =
+        '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}  '
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
-                color: Color(0xFF16A34A),
-                shape: BoxShape.circle,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            children: [
+              const SizedBox(height: 24),
+              // Success icon
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF16A34A),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check_rounded,
+                    color: Colors.white, size: 64),
               ),
-              child: const Icon(Icons.check_rounded, color: Colors.white, size: 64),
-            ),
-            const SizedBox(height: 32),
-            Text(
-              '¡Pago Completado!',
-              style: GoogleFonts.inter(
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
+              const SizedBox(height: 24),
+              Text(
+                '¡Pago Completado!',
+                style: GoogleFonts.inter(
+                    fontSize: 24, fontWeight: FontWeight.w900),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Tu servicio ha sido finalizado correctamente. Gracias por confiar en nosotros.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 15,
-                color: cs.onSurface.withOpacity(0.6),
-                height: 1.5,
+              const SizedBox(height: 8),
+              Text(
+                'Tu servicio ha sido finalizado correctamente.\nGracias por confiar en nosotros.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: cs.onSurface.withOpacity(0.6),
+                  height: 1.5,
+                ),
               ),
-            ),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => RatingScreen(incidentId: incident.id),
+              const SizedBox(height: 32),
+
+              // Payment detail card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(0.4)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.receipt_long_rounded,
+                            color: Color(0xFF6366F1), size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Comprobante de Pago',
+                          style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF6366F1),
+                              letterSpacing: 0.5),
+                        ),
+                      ],
                     ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: cs.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    const SizedBox(height: 20),
+                    const Divider(),
+                    const SizedBox(height: 16),
+                    _DetailRow(
+                      label: 'Monto pagado',
+                      value:
+                          'BOB ${incident.totalCost?.toStringAsFixed(2) ?? "0.00"}',
+                      cs: cs,
+                      valueColor: const Color(0xFF16A34A),
+                      bold: true,
+                    ),
+                    const SizedBox(height: 12),
+                    _DetailRow(
+                      label: 'Referencia',
+                      value: incident.id.substring(0, 8).toUpperCase(),
+                      cs: cs,
+                    ),
+                    const SizedBox(height: 12),
+                    _DetailRow(
+                      label: 'Fecha y hora',
+                      value: dateStr,
+                      cs: cs,
+                    ),
+                    const SizedBox(height: 12),
+                    _DetailRow(
+                      label: 'Método',
+                      value: 'PayPal',
+                      cs: cs,
+                    ),
+                    const SizedBox(height: 12),
+                    _DetailRow(
+                      label: 'Estado',
+                      value: 'COMPLETADO',
+                      cs: cs,
+                      valueColor: const Color(0xFF16A34A),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Rate button (primary)
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (_) => RatingScreen(incidentId: incident.id),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.star_rounded),
+                  label: Text(
+                    'Calificar el Servicio',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: cs.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
                   ),
                 ),
-                child: Text(
-                  'Continuar a Calificación',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+
+              // Go home button (secondary)
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context)
+                      .pushNamedAndRemoveUntil('/home', (route) => false),
+                  icon: const Icon(Icons.home_rounded),
+                  label: Text(
+                    'Volver al inicio',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                  ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final ColorScheme cs;
+  final Color? valueColor;
+  final bool bold;
+
+  const _DetailRow({
+    required this.label,
+    required this.value,
+    required this.cs,
+    this.valueColor,
+    this.bold = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            color: cs.onSurface.withOpacity(0.6),
+          ),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+            color: valueColor ?? cs.onSurface,
+          ),
+        ),
+      ],
+    );
+  }
+}
+

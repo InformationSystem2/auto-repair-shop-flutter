@@ -136,6 +136,23 @@ class DashboardService {
     }
   }
 
+  Future<({bool success, String message, TechnicianDashboardData? data})>
+      getTechnicianStats() async {
+    try {
+      final response =
+          await _dio.get('${AppConfig.apiUrl}/api/dashboard/technician');
+      final data = TechnicianDashboardData.fromJson(
+          response.data as Map<String, dynamic>);
+      return (success: true, message: '', data: data);
+    } on DioException catch (e) {
+      return (
+        success: false,
+        message: _extractError(e),
+        data: null,
+      );
+    }
+  }
+
   String _extractError(DioException e) {
     try {
       final d = e.response?.data;
@@ -145,4 +162,111 @@ class DashboardService {
       return e.message ?? 'Error de conexión';
     }
   }
+}
+
+class ActiveIncidentItem {
+  final String id;
+  final String? offerId;
+  final String clientName;
+  final String? aiCategory;
+  final String? aiPriority;
+  final String status;
+  final DateTime createdAt;
+  final double? latitude;
+  final double? longitude;
+
+  ActiveIncidentItem({
+    required this.id,
+    this.offerId,
+    required this.clientName,
+    this.aiCategory,
+    this.aiPriority,
+    required this.status,
+    required this.createdAt,
+    this.latitude,
+    this.longitude,
+  });
+
+  factory ActiveIncidentItem.fromJson(Map<String, dynamic> j) => ActiveIncidentItem(
+        id: j['id'] as String,
+        offerId: j['offer_id'] as String?,
+        clientName: j['client_name'] as String? ?? 'Cliente',
+        aiCategory: j['ai_category'] as String?,
+        aiPriority: j['ai_priority'] as String?,
+        status: j['status'] as String? ?? 'assigned',
+        createdAt: DateTime.parse(j['created_at'] as String),
+        latitude: (j['latitude'] as num?)?.toDouble(),
+        longitude: (j['longitude'] as num?)?.toDouble(),
+      );
+}
+
+class RecentCompletedItem {
+  final String id;
+  final String clientName;
+  final String? aiCategory;
+  final double amount;
+  final int? ratingScore;
+  final DateTime completedAt;
+
+  RecentCompletedItem({
+    required this.id,
+    required this.clientName,
+    this.aiCategory,
+    required this.amount,
+    this.ratingScore,
+    required this.completedAt,
+  });
+
+  factory RecentCompletedItem.fromJson(Map<String, dynamic> j) => RecentCompletedItem(
+        id: j['id'] as String,
+        clientName: j['client_name'] as String? ?? 'Cliente',
+        aiCategory: j['ai_category'] as String?,
+        amount: (j['amount'] as num).toDouble(),
+        ratingScore: j['rating_score'] as int?,
+        completedAt: DateTime.parse(j['completed_at'] as String),
+      );
+}
+
+class TechnicianDashboardData {
+  final int assignedCount;
+  final int inProgressCount;
+  final int completedToday;
+  final int completedTotal;
+  final double avgRating;
+  final double productivity;
+  final bool isAvailable;
+  final String workshopName;
+  final List<ActiveIncidentItem> activeIncidents;
+  final List<RecentCompletedItem> recentCompleted;
+
+  TechnicianDashboardData({
+    required this.assignedCount,
+    required this.inProgressCount,
+    required this.completedToday,
+    required this.completedTotal,
+    required this.avgRating,
+    required this.productivity,
+    required this.isAvailable,
+    required this.workshopName,
+    required this.activeIncidents,
+    required this.recentCompleted,
+  });
+
+  factory TechnicianDashboardData.fromJson(Map<String, dynamic> j) =>
+      TechnicianDashboardData(
+        assignedCount: (j['assigned_count'] as num).toInt(),
+        inProgressCount: (j['in_progress_count'] as num).toInt(),
+        completedToday: (j['completed_today'] as num).toInt(),
+        completedTotal: (j['completed_total'] as num).toInt(),
+        avgRating: (j['avg_rating'] as num).toDouble(),
+        productivity: (j['productivity'] as num).toDouble(),
+        isAvailable: j['is_available'] as bool? ?? true,
+        workshopName: j['workshop_name'] as String? ?? 'Taller',
+        activeIncidents: (j['active_incidents'] as List<dynamic>? ?? [])
+            .map((e) => ActiveIncidentItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        recentCompleted: (j['recent_completed'] as List<dynamic>? ?? [])
+            .map((e) => RecentCompletedItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
 }

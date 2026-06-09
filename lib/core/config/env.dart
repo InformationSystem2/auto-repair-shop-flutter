@@ -4,6 +4,10 @@ class AppConfig {
   static String get apiUrl =>
       dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000';
 
+  static String get wsUrl => apiUrl
+      .replaceFirst('http://', 'ws://')
+      .replaceFirst('https://', 'wss://');
+
   static String get loginEndpoint => '/api/auth/login';
   static String get meEndpoint => '/api/auth/me';
   static String get clientMeEndpoint => '/api/auth/profile';

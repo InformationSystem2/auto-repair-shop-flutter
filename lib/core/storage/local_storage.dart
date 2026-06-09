@@ -7,6 +7,10 @@ class LocalStorage {
   static const String _tokenKey = 'ars_auth_token';
   static const String _clientIdKey = 'ars_client_id';
 
+  static Future<SharedPreferences> getPrefs() async {
+    return await SharedPreferences.getInstance();
+  }
+
   // ── Token ──────────────────────────────────────────────────────────────────
 
   static Future<bool> saveToken(String token) async {

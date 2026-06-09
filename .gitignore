@@ -48,3 +48,4 @@ macos/
 linux/
 web/
 windows/
+.env

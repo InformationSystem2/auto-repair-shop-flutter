@@ -119,6 +119,9 @@ class NotificationService {
     return AutoRepairApp.navigatorKey.currentContext;
   }
 
+  /// Expuesto para llamarlo manualmente después del login.
+  Future<void> registerToken() => _registerToken();
+
   /// Obtiene el token FCM del dispositivo y lo envía al backend.
   Future<void> _registerToken() async {
     try {

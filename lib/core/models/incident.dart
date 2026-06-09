@@ -87,14 +87,14 @@ class EvidenceData {
 }
 
 class IncidentCreate {
-  final String description;
+  final String? description;
   final String vehicleId;
   final double latitude;
   final double longitude;
   final List<EvidenceData> evidences;
 
   const IncidentCreate({
-    required this.description,
+    this.description,
     required this.vehicleId,
     required this.latitude,
     required this.longitude,
@@ -102,7 +102,8 @@ class IncidentCreate {
   });
 
   Map<String, dynamic> toJson() => {
-        'description': description,
+        if (description != null && description!.trim().isNotEmpty)
+          'description': description,
         'vehicle_id': vehicleId,
         'latitude': latitude,
         'longitude': longitude,
