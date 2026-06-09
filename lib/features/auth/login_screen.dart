@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/storage/local_storage.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_notifier.dart';
 import '../../shared/widgets/ui.dart';
@@ -49,23 +51,50 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // Verificar si el usuario tiene el rol de cliente
-    final isClient = result.user?.roles.any((r) => r.name == 'client') ?? false;
+    // Determinar rol: primero desde el objeto User, si no desde el JWT
+    bool isClient = result.user?.roles.any((r) => r.name == 'client') ?? false;
+    bool isTechnician = result.user?.roles.any((r) => r.name == 'technician') ?? false;
 
-    if (isClient) {
+    // Fallback: decodificar el JWT si el usuario no tiene roles cargados
+    if (!isClient && !isTechnician) {
+      final token = await LocalStorage.getToken();
+      if (token != null) {
+        final roles = _rolesFromJwt(token);
+        isClient = roles.contains('client');
+        isTechnician = roles.contains('technician');
+      }
+    }
+
+    if (isClient || isTechnician) {
       Navigator.of(context).pushReplacementNamed('/home');
     } else {
-      // No es cliente → cerrar sesión y redirigir al registro
       await _authService.logout();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text(
-          'Tu cuenta no está registrada como cliente. '
-          'Por favor crea una cuenta de cliente.',
+          'Esta cuenta no tiene permisos de Cliente o Técnico.',
         ),
         duration: Duration(seconds: 4),
       ));
-      Navigator.of(context).pushReplacementNamed('/register');
+    }
+  }
+
+  /// Extrae la lista de nombres de roles del payload JWT (sin verificar firma)
+  List<String> _rolesFromJwt(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length < 2) return [];
+      final payload = parts[1];
+      // Padding base64
+      final normalized = base64Url.normalize(payload);
+      final decoded = utf8.decode(base64Url.decode(normalized));
+      final map = jsonDecode(decoded) as Map<String, dynamic>;
+      final roles = map['roles'] as List<dynamic>? ?? [];
+      return roles
+          .map((r) => (r is Map ? r['name'] : r).toString())
+          .toList();
+    } catch (_) {
+      return [];
     }
   }
 

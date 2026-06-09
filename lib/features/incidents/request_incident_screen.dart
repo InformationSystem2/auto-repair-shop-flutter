@@ -119,20 +119,33 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
         return;
       }
 
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
-        ),
-      );
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 15),
+          ),
+        );
+      } catch (_) {
+        pos = await Geolocator.getLastKnownPosition();
+      }
+
+      if (pos == null) {
+        throw Exception('Location not available');
+      }
 
       if (!mounted) return;
       setState(() {
-        _lat = pos.latitude;
-        _lng = pos.longitude;
+        _lat = pos!.latitude;
+        _lng = pos!.longitude;
         _locationReady = true;
       });
-      _mapController.move(LatLng(pos.latitude, pos.longitude), 15);
+      try {
+        _mapController.move(LatLng(pos.latitude, pos.longitude), 15);
+      } catch (_) {
+        // Ignorar si el mapa no está montado aún
+      }
     } catch (e) {
       if (mounted) {
         _showSnack('No se pudo obtener la ubicación', isError: true);
@@ -1113,6 +1126,71 @@ class _ActiveIncidentView extends StatelessWidget {
                 ),
               ),
             ),
+
+            if (incident.status != 'IN_PROGRESS') ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('¿Cancelar auxilio?'),
+                        content: const Text('¿Estás seguro de que deseas cancelar la solicitud de asistencia? El taller y el técnico asignado serán liberados.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(false),
+                            child: const Text('No, mantener'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(true),
+                            style: TextButton.styleFrom(foregroundColor: Colors.red),
+                            child: const Text('Sí, cancelar'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      if (!context.mounted) return;
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (_) => const Center(child: CircularProgressIndicator()),
+                      );
+                      
+                      final res = await IncidentService().cancelIncident(incident.id);
+                      
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop(); // Close loading
+                      
+                      if (res.success) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(res.message)),
+                        );
+                        onRefresh();
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(res.message), backgroundColor: Colors.red),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+                  label: Text(
+                    'Cancelar solicitud de auxilio',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: Colors.red),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: const BorderSide(color: Colors.red, width: 1.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

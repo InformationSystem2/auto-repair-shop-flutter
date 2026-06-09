@@ -80,6 +80,35 @@ class IncidentService {
     }
   }
 
+  Future<({bool success, String message})> cancelIncident(String id) async {
+    try {
+      final response = await _dio.post('${AppConfig.incidentsEndpoint}/$id/cancel');
+      final data = response.data as Map<String, dynamic>;
+      return (
+        success: true,
+        message: data['message'] as String? ?? 'Incidente cancelado correctamente'
+      );
+    } on DioException catch (e) {
+      return (success: false, message: _extractError(e));
+    }
+  }
+
+  Future<({bool success, String message})> completeOffer(String offerId, double cost) async {
+    try {
+      final response = await _dio.post(
+        '${AppConfig.apiUrl}/api/offers/$offerId/complete',
+        data: {'cost': cost},
+      );
+      final data = response.data as Map<String, dynamic>;
+      return (
+        success: true,
+        message: data['message'] as String? ?? 'Servicio completado exitosamente'
+      );
+    } on DioException catch (e) {
+      return (success: false, message: _extractError(e));
+    }
+  }
+
   String _extractError(DioException e) {
     try {
       final data = e.response?.data;

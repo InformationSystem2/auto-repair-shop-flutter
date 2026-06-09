@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../core/services/location_tracking_service.dart';
 import '../../core/services/incident_service.dart';
+import '../../core/config/dio_client.dart';
 import 'payment_screen.dart';
 
 class TechnicianTrackingScreen extends StatefulWidget {
@@ -37,12 +38,14 @@ class _TechnicianTrackingScreenState extends State<TechnicianTrackingScreen>
 
   TechnicianLocation? _techLocation;
   String _connectionStatus = 'connecting';
+  List<LatLng> _routePoints = [];
 
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnim;
 
   StreamSubscription<TechnicianLocation>? _locationSub;
   StreamSubscription<String>? _statusSub;
+  StreamSubscription<ArrivalEvent>? _arrivedSub;
   Timer? _statusTimer;
   bool _redirectingToPayment = false;
 
@@ -62,11 +65,23 @@ class _TechnicianTrackingScreenState extends State<TechnicianTrackingScreen>
       if (!mounted) return;
       setState(() => _techLocation = loc);
       _mapController.move(LatLng(loc.lat, loc.lng), _mapController.camera.zoom);
+      _fetchRoute(LatLng(loc.lat, loc.lng));
     });
 
     _statusSub = _tracking.statusStream.listen((status) {
       if (!mounted) return;
       setState(() => _connectionStatus = status);
+    });
+
+    _arrivedSub = _tracking.arrivedStream.listen((event) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(event.message),
+        backgroundColor: const Color(0xFF10B981),
+        duration: const Duration(seconds: 5),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
     });
 
     _tracking.connectAsViewer(widget.incidentId);
@@ -75,6 +90,40 @@ class _TechnicianTrackingScreenState extends State<TechnicianTrackingScreen>
     _statusTimer = Timer.periodic(const Duration(seconds: 6), (_) {
       _checkIncidentStatus();
     });
+  }
+
+  Future<void> _fetchRoute(LatLng techPos) async {
+    if (widget.clientLat == null || widget.clientLng == null) return;
+    try {
+      final url = 'https://router.project-osrm.org/route/v1/driving/'
+          '${techPos.longitude},${techPos.latitude};'
+          '${widget.clientLng},${widget.clientLat}'
+          '?overview=full&geometries=geojson';
+      
+      final dio = DioClient.instance.dio;
+      final response = await dio.get(url);
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        final routes = data['routes'] as List<dynamic>?;
+        if (routes != null && routes.isNotEmpty) {
+          final geometry = routes[0]['geometry'] as Map<String, dynamic>?;
+          if (geometry != null) {
+            final coordinates = geometry['coordinates'] as List<dynamic>?;
+            if (coordinates != null) {
+              final pts = coordinates.map((pt) {
+                final list = pt as List<dynamic>;
+                return LatLng(list[1].toDouble(), list[0].toDouble());
+              }).toList();
+              if (mounted) {
+                setState(() {
+                  _routePoints = pts;
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkIncidentStatus() async {
@@ -96,6 +145,7 @@ class _TechnicianTrackingScreenState extends State<TechnicianTrackingScreen>
   void dispose() {
     _locationSub?.cancel();
     _statusSub?.cancel();
+    _arrivedSub?.cancel();
     _statusTimer?.cancel();
     _pulseController.dispose();
     _tracking.dispose();
@@ -159,6 +209,18 @@ class _TechnicianTrackingScreenState extends State<TechnicianTrackingScreen>
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.auto_repair_shop',
               ),
+              if (_routePoints.isNotEmpty)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _routePoints,
+                      color: Colors.blue,
+                      strokeWidth: 5,
+                      strokeCap: StrokeCap.round,
+                      strokeJoin: StrokeJoin.round,
+                    ),
+                  ],
+                ),
               MarkerLayer(
                 markers: [
                   if (widget.clientLat != null && widget.clientLng != null)
