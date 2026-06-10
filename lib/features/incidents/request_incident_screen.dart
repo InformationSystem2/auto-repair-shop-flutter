@@ -11,6 +11,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/vehicles_provider.dart';
+import '../../core/config/dio_client.dart';
+import '../../core/storage/local_storage.dart';
 import '../../core/models/incident.dart';
 import '../../core/models/vehicle.dart';
 import '../../core/services/incident_service.dart';
@@ -52,16 +54,69 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
   Timer? _pollTimer;
   String? _lastKnownIncidentId;
 
+  // Servicio completado SIN pagar: bloquea solicitar otro hasta pagar
+  Incident? _pendingPaymentIncident;
+
+  // Solicitud guardada offline a la espera de internet
+  bool _pendingOffline = false;
+
   @override
   void initState() {
     super.initState();
+    _loadPendingState();
     _checkActiveIncident();
     _loadInitial();
     _acquireLocation();
     // Poll every 5s to detect when workshop completes the service
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _checkActiveIncident();
+      if (_pendingOffline) {
+        // Mientras haya una solicitud pendiente, reintentar enviarla en cuanto
+        // vuelva el internet (limpia el flag automáticamente al confirmarse).
+        _loadPendingState();
+      } else {
+        _checkActiveIncident();
+      }
     });
+  }
+
+  Future<void> _loadPendingState() async {
+    // Con internet, intentar procesar la solicitud pendiente: sube sus archivos
+    // de evidencia y luego envía el request-help. Limpia el flag al confirmarse.
+    if (await DioClient.instance.hasNetwork()) {
+      final incident = await IncidentService().syncPendingOffline();
+      if (!mounted) return;
+      if (incident != null) {
+        setState(() {
+          _pendingOffline = false;
+          _activeIncident = incident;
+          _lastKnownIncidentId = incident.id;
+          _checkingActive = false;
+        });
+        _showSnack('Tu solicitud guardada se envió correctamente.');
+        return;
+      }
+    }
+    final pending = await LocalStorage.hasPendingIncident();
+    if (mounted) setState(() => _pendingOffline = pending);
+  }
+
+  Future<void> _cancelPendingOffline() async {
+    // Borrar los archivos locales de evidencia de la solicitud descartada
+    final pending = await LocalStorage.getPendingIncident();
+    if (pending != null) {
+      for (final raw in (pending['evidences'] as List? ?? [])) {
+        final lp = (raw as Map)['local_path'] as String?;
+        if (lp != null) {
+          try {
+            await File(lp).delete();
+          } catch (_) {}
+        }
+      }
+    }
+    await DioClient.instance.cancelPendingIncident();
+    if (!mounted) return;
+    setState(() => _pendingOffline = false);
+    _showSnack('Solicitud pendiente cancelada');
   }
 
   Future<void> _checkActiveIncident() async {
@@ -90,11 +145,41 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
       }
     }
 
+    // Sin incidente activo → ¿hay un servicio completado sin pagar?
+    // Si lo hay, bloquea el formulario y obliga a pagar primero.
+    if (active == null) {
+      final unpaid = await IncidentService().getPendingPaymentIncident();
+      if (!mounted) return;
+      if (unpaid != null) {
+        setState(() {
+          _activeIncident = null;
+          _pendingPaymentIncident = unpaid;
+          _lastKnownIncidentId = unpaid.id;
+          _checkingActive = false;
+        });
+        return;
+      }
+    }
+
     setState(() {
       _lastKnownIncidentId = active?.id ?? _lastKnownIncidentId;
       _activeIncident = active;
+      _pendingPaymentIncident = active != null ? null : _pendingPaymentIncident;
       _checkingActive = false;
     });
+  }
+
+  Future<void> _payPending() async {
+    final incident = _pendingPaymentIncident;
+    if (incident == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => PaymentScreen(incident: incident)),
+    );
+    // Al volver del flujo de pago, re-verificar (si pagó, se libera el bloqueo)
+    if (mounted) {
+      setState(() => _checkingActive = true);
+      await _checkActiveIncident();
+    }
   }
 
   @override
@@ -165,21 +250,50 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
     }
   }
 
-  Future<void> _uploadAndAdd(File file, String type) async {
+  Future<void> _addEvidence(File file, String type) async {
     setState(() => _isUploading = true);
-    final result = await _incidentService.uploadEvidence(file);
-    if (!mounted) return;
-    setState(() => _isUploading = false);
-    if (result.success && result.fileUrl != null) {
+
+    final online = await DioClient.instance.hasNetwork();
+
+    // Con conexión: subir de inmediato al backend (la IA lo analiza allí).
+    if (online) {
+      final result = await _incidentService.uploadEvidence(file);
+      if (!mounted) return;
+      setState(() => _isUploading = false);
+      if (result.success && result.fileUrl != null) {
+        setState(() {
+          _evidences.add(EvidenceData(
+            type: result.evidenceType ?? type,
+            fileUrl: result.fileUrl!,
+          ));
+        });
+        _showSnack(type == 'image' ? 'Imagen agregada' : 'Audio agregado');
+      } else {
+        _showSnack('Error al subir archivo', isError: true);
+      }
+      return;
+    }
+
+    // Sin conexión: copiar el archivo a un directorio persistente y guardar su
+    // ruta local. Se subirá y analizará cuando vuelva el internet.
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final ext = file.path.contains('.') ? file.path.split('.').last : 'dat';
+      final dest =
+          '${dir.path}/offline_ev_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final saved = await file.copy(dest);
+      if (!mounted) return;
       setState(() {
-        _evidences.add(EvidenceData(
-          type: result.evidenceType ?? type,
-          fileUrl: result.fileUrl!,
-        ));
+        _isUploading = false;
+        _evidences.add(EvidenceData(type: type, localPath: saved.path));
       });
-      _showSnack(type == 'image' ? 'Imagen agregada' : 'Audio agregado');
-    } else {
-      _showSnack('Error al subir archivo', isError: true);
+      _showSnack(type == 'image'
+          ? 'Imagen guardada — se subirá al volver el internet'
+          : 'Audio guardado — se subirá al volver el internet');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUploading = false);
+      _showSnack('Error al guardar archivo', isError: true);
     }
   }
 
@@ -187,7 +301,7 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
     try {
       final photo = await _imagePicker.pickImage(source: ImageSource.camera);
       if (photo == null) return;
-      await _uploadAndAdd(File(photo.path), 'image');
+      await _addEvidence(File(photo.path), 'image');
     } catch (e) {
       _showSnack('Error al capturar foto', isError: true);
     }
@@ -197,7 +311,7 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
     try {
       final image = await _imagePicker.pickImage(source: ImageSource.gallery);
       if (image == null) return;
-      await _uploadAndAdd(File(image.path), 'image');
+      await _addEvidence(File(image.path), 'image');
     } catch (e) {
       _showSnack('Error al seleccionar imagen', isError: true);
     }
@@ -208,7 +322,7 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
       final path = await _audioRecorder.stop();
       setState(() => _isRecording = false);
       if (path != null) {
-        await _uploadAndAdd(File(path), 'audio');
+        await _addEvidence(File(path), 'audio');
       }
     } else {
       final hasPermission = await _audioRecorder.hasPermission();
@@ -225,6 +339,18 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
 
 
   Future<void> _submit() async {
+    // Bloqueo anti-duplicados: si ya hay una solicitud guardada esperando
+    // internet, no se permite crear otra (evita múltiples servicios al
+    // recuperar la conexión).
+    if (_pendingOffline || await LocalStorage.hasPendingIncident()) {
+      if (mounted) setState(() => _pendingOffline = true);
+      _showSnack(
+        'Ya tienes una solicitud pendiente por enviar. Espera a que se envíe.',
+        isError: true,
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
     if (_selectedVehicle == null) {
       _showSnack('Selecciona un vehículo', isError: true);
@@ -247,13 +373,62 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
     final mapCenter = _mapController.camera.center;
     final submitLat = mapCenter.latitude;
     final submitLng = mapCenter.longitude;
+    final desc = hasText ? _descController.text.trim() : null;
+
+    final online = await DioClient.instance.hasNetwork();
+
+    // ── Sin conexión: guardar la solicitud COMPLETA (incluidas las rutas
+    // locales de imágenes/audio) para subirla y procesarla al volver internet.
+    if (!online) {
+      await LocalStorage.savePendingIncident({
+        'description': desc,
+        'vehicle_id': _selectedVehicle!.id,
+        'latitude': submitLat,
+        'longitude': submitLng,
+        'evidences': _evidences.map((e) => e.toStorageJson()).toList(),
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _pendingOffline = true;
+      });
+      _showSnack(
+        'Sin conexión: tu solicitud y sus archivos se guardaron y se enviarán '
+        'automáticamente cuando vuelva el internet.',
+      );
+      return;
+    }
+
+    // ── En línea: asegurar que toda evidencia esté subida (puede haber alguna
+    // adjuntada offline antes de recuperar la conexión).
+    final List<EvidenceData> resolved = [];
+    for (final ev in _evidences) {
+      if (ev.isUploaded) {
+        resolved.add(ev);
+        continue;
+      }
+      if (ev.localPath != null) {
+        final up = await _incidentService.uploadEvidence(File(ev.localPath!));
+        if (up.success && up.fileUrl != null) {
+          resolved.add(EvidenceData(
+              type: up.evidenceType ?? ev.type, fileUrl: up.fileUrl!));
+        } else {
+          if (!mounted) return;
+          setState(() => _isSubmitting = false);
+          _showSnack('Error al subir una evidencia. Intenta de nuevo.',
+              isError: true);
+          return;
+        }
+      }
+    }
 
     final payload = IncidentCreate(
-      description: hasText ? _descController.text.trim() : null,
+      description: desc,
       vehicleId: _selectedVehicle!.id,
       latitude: submitLat,
       longitude: submitLng,
-      evidences: _evidences,
+      evidences: resolved,
     );
 
     final result = await _incidentService.requestHelp(payload);
@@ -267,9 +442,14 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
           builder: (_) => IncidentStatusScreen(incident: result.incident!),
         ),
       );
-    } else {
-      _showSnack(result.message, isError: true);
+      return;
     }
+
+    // Error real del servidor estando en línea
+    _showSnack(result.message, isError: true);
+    // Puede ser el bloqueo por pago pendiente (409): re-verificar para mostrar
+    // la pantalla de pago en lugar del formulario.
+    _checkActiveIncident();
   }
 
   void _showSnack(String msg, {bool isError = false}) {
@@ -286,11 +466,29 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
     final provider = context.watch<VehiclesProvider>();
     final vehicles = provider.activeVehicles;
 
+    // Una solicitud guardada offline bloquea el formulario hasta que se envíe
+    if (_pendingOffline) {
+      return _PendingOfflineView(
+        cs: cs,
+        onCancel: _cancelPendingOffline,
+        onRefresh: _loadPendingState,
+      );
+    }
+
     // Show loading while checking for active incident
     if (_checkingActive) {
       return Scaffold(
         appBar: AppBar(title: const Text('Auxilio')),
         body: Center(child: CircularProgressIndicator(color: cs.primary)),
+      );
+    }
+
+    // Servicio completado sin pagar → bloquear el formulario hasta pagar
+    if (_pendingPaymentIncident != null) {
+      return _PendingPaymentView(
+        incident: _pendingPaymentIncident!,
+        onPay: _payPending,
+        cs: cs,
       );
     }
 
@@ -379,8 +577,15 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
                 onAddPhoto: _capturePhoto,
                 onAddGallery: _pickImage,
                 onToggleAudio: _toggleRecording,
-                onRemove: (index) {
-                  setState(() => _evidences.removeAt(index));
+                onRemove: (index) async {
+                  final ev = _evidences[index];
+                  // Borrar la copia local si la evidencia se guardó offline
+                  if (ev.localPath != null) {
+                    try {
+                      await File(ev.localPath!).delete();
+                    } catch (_) {}
+                  }
+                  if (mounted) setState(() => _evidences.removeAt(index));
                 },
                 isRecording: _isRecording,
                 isUploading: _isUploading,
@@ -423,6 +628,203 @@ class _RequestIncidentScreenState extends State<RequestIncidentScreen> {
 }
 
 // ─── Sub-widgets ─────────────────────────────────────────────────────────────
+
+class _PendingPaymentView extends StatelessWidget {
+  final Incident incident;
+  final Future<void> Function() onPay;
+  final ColorScheme cs;
+
+  const _PendingPaymentView({
+    required this.incident,
+    required this.onPay,
+    required this.cs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Pago pendiente')),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.account_balance_wallet_rounded,
+                    color: Color(0xFFF59E0B), size: 48),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Tienes un pago pendiente',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 18,
+                  color: cs.onSurface,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Tu último servicio fue completado pero aún no lo has pagado. '
+                'Debes completar el pago antes de solicitar otro auxilio.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: cs.onSurface.withOpacity(0.6),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    Text('Total a pagar',
+                        style: GoogleFonts.inter(
+                            fontSize: 13, color: cs.onSurface.withOpacity(0.6))),
+                    const SizedBox(height: 4),
+                    Text(
+                      'BOB ${incident.totalCost?.toStringAsFixed(2) ?? "0.00"}',
+                      style: GoogleFonts.inter(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          color: cs.onSurface),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton.icon(
+                  onPressed: () => onPay(),
+                  icon: const Icon(Icons.payment_rounded),
+                  label: Text('Pagar ahora',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: cs.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PendingOfflineView extends StatelessWidget {
+  final ColorScheme cs;
+  final Future<void> Function() onCancel;
+  final Future<void> Function() onRefresh;
+
+  const _PendingOfflineView({
+    required this.cs,
+    required this.onCancel,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Solicitar Auxilio')),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.cloud_off_rounded,
+                    color: Color(0xFFF59E0B), size: 48),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Solicitud guardada sin conexión',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 18,
+                  color: cs.onSurface,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Tu solicitud de auxilio se enviará automáticamente cuando '
+                'vuelva el internet. No puedes crear otra hasta que esta se envíe.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: cs.onSurface.withOpacity(0.6),
+                ),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onRefresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Reintentar envío ahora'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  onPressed: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Cancelar solicitud'),
+                        content: const Text(
+                            '¿Descartar la solicitud guardada? No se enviará al recuperar el internet.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('No'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Sí, descartar'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) await onCancel();
+                  },
+                  icon: Icon(Icons.delete_outline_rounded, color: cs.error),
+                  label: Text('Descartar solicitud',
+                      style: TextStyle(color: cs.error)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _EmergencyBanner extends StatelessWidget {
   final ColorScheme cs;
