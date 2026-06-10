@@ -6,6 +6,8 @@ class LocalStorage {
   static const String _userKey = 'ars_user_data';
   static const String _tokenKey = 'ars_auth_token';
   static const String _clientIdKey = 'ars_client_id';
+  static const String _vehiclesCacheKey = 'ars_vehicles_cache';
+  static const String _pendingIncidentKey = 'ars_pending_offline_incident';
 
   static Future<SharedPreferences> getPrefs() async {
     return await SharedPreferences.getInstance();
@@ -75,6 +77,55 @@ class LocalStorage {
     return prefs.getString(_clientIdKey);
   }
 
+  // ── Cache de vehículos (para usar el formulario sin conexión) ───────────────
+
+  static Future<void> saveVehiclesCache(List<Map<String, dynamic>> vehicles) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_vehiclesCacheKey, json.encode(vehicles));
+  }
+
+  static Future<List<Map<String, dynamic>>> getVehiclesCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_vehiclesCacheKey);
+      if (raw == null) return [];
+      final list = json.decode(raw) as List<dynamic>;
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ── Solicitud de auxilio pendiente por enviar (modo offline) ────────────────
+  // Solo puede existir UNA a la vez, para evitar múltiples solicitudes al
+  // recuperar la conexión.
+
+  static Future<void> savePendingIncident(Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pendingIncidentKey, json.encode(data));
+  }
+
+  static Future<Map<String, dynamic>?> getPendingIncident() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_pendingIncidentKey);
+      if (raw == null) return null;
+      return json.decode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> hasPendingIncident() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.containsKey(_pendingIncidentKey);
+  }
+
+  static Future<void> clearPendingIncident() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_pendingIncidentKey);
+  }
+
   // ── Clear ──────────────────────────────────────────────────────────────────
 
   static Future<bool> clearAll() async {
@@ -83,6 +134,8 @@ class LocalStorage {
       await prefs.remove(_userKey);
       await prefs.remove(_tokenKey);
       await prefs.remove(_clientIdKey);
+      await prefs.remove(_vehiclesCacheKey);
+      await prefs.remove(_pendingIncidentKey);
       return true;
     } catch (_) {
       return false;
