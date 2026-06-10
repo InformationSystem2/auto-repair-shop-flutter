@@ -72,18 +72,40 @@ class EvidenceData {
   final String type;
   final String fileUrl;
   final String? transcription;
+  // Ruta del archivo en disco cuando la evidencia se adjuntó sin conexión y aún
+  // no se ha subido al servidor. Null/vacío una vez subida.
+  final String? localPath;
 
   const EvidenceData({
     required this.type,
-    required this.fileUrl,
+    this.fileUrl = '',
     this.transcription,
+    this.localPath,
   });
+
+  /// True si ya tiene URL del servidor (subida). False si solo existe local.
+  bool get isUploaded => fileUrl.isNotEmpty;
 
   Map<String, dynamic> toJson() => {
         'evidence_type': type,
         'file_url': fileUrl,
         if (transcription != null) 'transcription': transcription,
       };
+
+  /// Serialización para la cola offline (conserva la ruta local del archivo).
+  Map<String, dynamic> toStorageJson() => {
+        'evidence_type': type,
+        if (fileUrl.isNotEmpty) 'file_url': fileUrl,
+        if (transcription != null) 'transcription': transcription,
+        if (localPath != null) 'local_path': localPath,
+      };
+
+  factory EvidenceData.fromStorageJson(Map<String, dynamic> json) => EvidenceData(
+        type: (json['evidence_type'] ?? json['type']) as String,
+        fileUrl: (json['file_url'] as String?) ?? '',
+        transcription: json['transcription'] as String?,
+        localPath: json['local_path'] as String?,
+      );
 }
 
 class IncidentCreate {
