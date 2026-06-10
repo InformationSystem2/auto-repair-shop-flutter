@@ -101,7 +101,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   void _handleNavigation(NotificationModel notification) async {
     if (notification.incidentId != null) {
-      if (notification.type == 'SERVICE_COMPLETED') {
+      if (notification.type == 'SERVICE_COMPLETED' || notification.type == 'PAYMENT') {
         // Validación de pago para redirección inteligente
         final incident = await IncidentService().getIncident(notification.incidentId!);
         if (incident != null && incident.paymentStatus != 'completed') {
@@ -134,7 +134,7 @@ class _NotificationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isUnread = !notification.isRead;
-    final isPaymentRequired = (notification.type == 'PAYMENT_PENDING' || notification.type == 'SERVICE_COMPLETED') && 
+    final isPaymentRequired = (notification.type == 'PAYMENT_PENDING' || notification.type == 'SERVICE_COMPLETED' || notification.type == 'PAYMENT') &&
                                notification.paymentStatus != 'completed';
 
     return Container(
@@ -253,6 +253,10 @@ class _NotificationCard extends StatelessWidget {
     Color color;
 
     switch (type) {
+      case 'PAYMENT':
+        icon = Icons.account_balance_wallet_outlined;
+        color = const Color(0xFFF59E0B); // Amber: acción de pago requerida
+        break;
       case 'SERVICE_COMPLETED':
       case 'PAYMENT_PENDING':
         icon = Icons.check_circle_outline;

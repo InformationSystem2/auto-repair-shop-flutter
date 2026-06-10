@@ -8,8 +8,6 @@ import '../config/dio_client.dart';
 import '../config/env.dart';
 
 import '../../app.dart';
-import 'incident_service.dart';
-import '../../features/incidents/payment_screen.dart';
 
 /// Handler para mensajes recibidos en background (debe ser top-level function)
 @pragma('vm:entry-point')
@@ -157,7 +155,10 @@ class NotificationService {
 
   Future<List<dynamic>> getNotifications({int limit = 50}) async {
     try {
-      final response = await _dio.get('/notifications', queryParameters: {'limit': limit});
+      final response = await _dio.get(
+        AppConfig.notificationsEndpoint,
+        queryParameters: {'limit': limit},
+      );
       return response.data;
     } catch (e) {
       debugPrint('[FCM] Error fetching notifications: $e');
@@ -167,7 +168,7 @@ class NotificationService {
 
   Future<bool> markAsRead(String notificationId) async {
     try {
-      await _dio.patch('/notifications/$notificationId/read');
+      await _dio.patch('${AppConfig.notificationsEndpoint}/$notificationId/read');
       return true;
     } catch (e) {
       debugPrint('[FCM] Error marking notification as read: $e');
@@ -177,7 +178,8 @@ class NotificationService {
 
   Future<int> getUnreadCount() async {
     try {
-      final response = await _dio.get('/notifications/unread-count');
+      final response =
+          await _dio.get('${AppConfig.notificationsEndpoint}/unread-count');
       return response.data['unread_count'] ?? 0;
     } catch (e) {
       debugPrint('[FCM] Error getting unread count: $e');

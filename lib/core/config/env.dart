@@ -19,4 +19,5 @@ class AppConfig {
   static String get fcmTokenEndpoint => '/api/auth/fcm-token';
   static String get ratingsEndpoint => '/api/ratings';
   static String get paymentsEndpoint => '/api/payments';
+  static String get notificationsEndpoint => '/api/notifications';
 }

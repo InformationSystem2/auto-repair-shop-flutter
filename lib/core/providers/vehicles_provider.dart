@@ -22,11 +22,22 @@ class VehiclesProvider extends ChangeNotifier {
     notifyListeners();
 
     final result = await _vehicleService.getMyVehicles();
-    
+
     if (result.success) {
       _vehicles = result.vehicles;
+      // Guardar en caché para poder usar el formulario sin conexión
+      await LocalStorage.saveVehiclesCache(
+        _vehicles.map((v) => v.toJson()).toList(),
+      );
     } else {
-      _error = result.message;
+      // Sin conexión: usar la última copia cacheada en lugar de fallar
+      final cached = await LocalStorage.getVehiclesCache();
+      if (cached.isNotEmpty) {
+        _vehicles = cached.map(Vehicle.fromJson).toList();
+        _error = null;
+      } else {
+        _error = result.message;
+      }
     }
 
     _isLoading = false;
