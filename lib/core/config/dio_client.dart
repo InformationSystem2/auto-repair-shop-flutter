@@ -92,6 +92,33 @@ class DioClient {
     }
   }
 
+  /// Expuesto para que las pantallas detecten el estado de conexión antes de
+  /// intentar una operación mutativa.
+  Future<bool> hasNetwork() => _checkNetwork();
+
+  /// Fuerza un intento de sincronización de la cola offline (p. ej. al volver
+  /// a primer plano la pantalla de solicitud).
+  Future<void> syncNow() => _syncOfflineQueue();
+
+  /// Descarta la solicitud de auxilio pendiente: la quita de la cola offline y
+  /// libera el bloqueo. Útil si el usuario decide cancelarla antes de enviarse.
+  Future<void> cancelPendingIncident() async {
+    try {
+      final prefs = await LocalStorage.getPrefs();
+      final List<String> queue = prefs.getStringList(_offlineQueueKey) ?? [];
+      final filtered = queue.where((rawReq) {
+        try {
+          final req = json.decode(rawReq) as Map<String, dynamic>;
+          return !(req['path'] as String).contains('request-help');
+        } catch (_) {
+          return true;
+        }
+      }).toList();
+      await prefs.setStringList(_offlineQueueKey, filtered);
+    } catch (_) {}
+    await LocalStorage.clearPendingIncident();
+  }
+
   Future<void> _enqueueRequest(RequestOptions options) async {
     try {
       final prefs = await LocalStorage.getPrefs();
@@ -163,6 +190,11 @@ class DioClient {
             ),
           );
           print('[OfflineQueue] Sincronizada con éxito: ${req['path']}');
+          // Si la solicitud de auxilio pendiente ya se envió, liberar el bloqueo
+          // que impedía crear otra mientras estaba offline.
+          if ((req['path'] as String).contains('request-help')) {
+            await LocalStorage.clearPendingIncident();
+          }
         } catch (e) {
           print('[OfflineQueue] Falló reintentar petición. Se mantiene en la cola.');
           unresolved.add(rawReq);
