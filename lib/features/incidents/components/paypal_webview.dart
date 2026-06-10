@@ -75,7 +75,11 @@ class _PaypalWebViewState extends State<PaypalWebView> {
         title: const Text('PayPal Payment'),
         leading: IconButton(
           icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            // Cerrar manualmente = cancelar el pago (no se marca como pagado)
+            widget.onCancel();
+            Navigator.of(context).pop();
+          },
         ),
       ),
       body: Stack(
