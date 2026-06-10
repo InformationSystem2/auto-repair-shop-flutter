@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/providers/vehicles_provider.dart';
 import '../../../core/services/vehicle_service.dart';
-import '../../../core/storage/local_storage.dart';
 import '../../../core/theme/theme_notifier.dart';
 import '../../../shared/widgets/ui.dart';
 import 'widgets/vehicle_card.dart';
@@ -26,7 +25,11 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   @override
   void initState() {
     super.initState();
-    _loadInitial();
+    // Diferir al primer frame para evitar notifyListeners() del provider
+    // durante el build (causaba que la lista no se mostrara hasta revisitar).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadInitial();
+    });
   }
 
   Future<void> _loadInitial() async {

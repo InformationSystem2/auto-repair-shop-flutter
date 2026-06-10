@@ -40,6 +40,20 @@ class Vehicle {
         isActive: json['is_active'] as bool? ?? true,
       );
 
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'client_id': clientId,
+        'make': make,
+        'model': model,
+        'year': year,
+        'license_plate': licensePlate,
+        'color': color,
+        'transmission_type': transmissionType,
+        'fuel_type': fuelType,
+        'vin': vin,
+        'is_active': isActive,
+      };
+
   String get displayName => '$make $model ($year)';
   String get subtitle => '$licensePlate${color != null ? ' • $color' : ''}';
 

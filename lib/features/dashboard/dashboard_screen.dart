@@ -45,8 +45,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _loadAll();
-    _loadUnreadCount();
+    // Diferir al primer frame: cargar dentro de initState dispara
+    // notifyListeners() del provider durante el build y la UI no se refresca
+    // hasta cambiar de pestaña. (_loadAll ya incluye el conteo de no leídas.)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadAll();
+    });
   }
 
   Future<void> _loadAll() async {
