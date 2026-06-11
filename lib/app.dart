@@ -4,6 +4,7 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/theme_notifier.dart';
 import 'features/splash/splash_screen.dart';
 import 'features/auth/login_screen.dart';
+import 'features/auth/forgot_password/forgot_password_screen.dart';
 import 'features/register/register_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/incidents/incident_detail_screen.dart';
@@ -29,6 +30,7 @@ class AutoRepairApp extends StatelessWidget {
         routes: {
           '/splash':   (_) => const SplashScreen(),
           '/login':    (_) => const LoginScreen(),
+          '/forgot-password': (_) => const ForgotPasswordScreen(),
           '/register': (_) => const RegisterScreen(),
           '/home':     (_) => const HomeScreen(),
           '/notifications': (_) => const NotificationScreen(),
