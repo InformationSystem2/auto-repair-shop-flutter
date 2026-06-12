@@ -164,4 +164,20 @@ class AuthService {
       return (success: false, message: 'Error: $e', code: null);
     }
   }
+
+  Future<({bool success, String message})> verifyCode(
+      String email, String code) async {
+    try {
+      final response = await _dio.post(
+        AppConfig.verifyCodeEndpoint,
+        data: {'email': email, 'code': code},
+      );
+      final msg = (response.data as Map)['message'] as String? ?? '';
+      return (success: true, message: msg);
+    } on DioException catch (e) {
+      return (success: false, message: _extractError(e));
+    } catch (e) {
+      return (success: false, message: 'Error: $e');
+    }
+  }
 }

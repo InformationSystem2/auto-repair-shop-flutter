@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/services/client_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/theme_notifier.dart';
@@ -16,7 +17,9 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // Datos de usuario
+  final _authService = AuthService();
+  final _clientService = ClientService();
+
   final _nameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
@@ -24,16 +27,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordCtrl = TextEditingController();
   final _confirmPasswordCtrl = TextEditingController();
 
-  // Datos de cliente
   final _addressCtrl = TextEditingController();
   final _insuranceProviderCtrl = TextEditingController();
   final _policyNumberCtrl = TextEditingController();
-
-  final _clientService = ClientService();
+  final _codeCtrl = TextEditingController();
 
   bool _isLoading = false;
   bool _obscurePass = true;
   bool _obscureConfirm = true;
+  bool _codeSent = false;
+  bool _codeVerified = false;
+  String? _devCode;
+  bool _sendingCode = false;
 
   @override
   void dispose() {
@@ -41,14 +46,80 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _nameCtrl, _lastNameCtrl, _emailCtrl, _phoneCtrl,
       _passwordCtrl, _confirmPasswordCtrl,
       _addressCtrl, _insuranceProviderCtrl, _policyNumberCtrl,
+      _codeCtrl,
     ]) {
       c.dispose();
     }
     super.dispose();
   }
 
+  Future<void> _sendVerificationCode() async {
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty || !RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Ingresa un correo válido'),
+        backgroundColor: AppColors.danger,
+      ));
+      return;
+    }
+
+    setState(() => _sendingCode = true);
+
+    final result = await _authService.sendVerificationCode(email);
+
+    if (!mounted) return;
+    setState(() => _sendingCode = false);
+
+    if (result.success) {
+      setState(() {
+        _codeSent = true;
+        _devCode = result.code;
+        if (_devCode != null) {
+          _codeCtrl.text = _devCode!;
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result.message),
+        backgroundColor: AppColors.success,
+      ));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result.message),
+        backgroundColor: AppColors.danger,
+      ));
+    }
+  }
+
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (!_codeSent) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Solicita un código de verificación primero'),
+        backgroundColor: AppColors.danger,
+      ));
+      return;
+    }
+
+    if (!_codeVerified) {
+      final verifyResult = await _authService.verifyCode(
+        _emailCtrl.text.trim(),
+        _codeCtrl.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      if (!verifyResult.success) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(verifyResult.message),
+          backgroundColor: AppColors.danger,
+        ));
+        return;
+      }
+
+      setState(() => _codeVerified = true);
+    }
+
     setState(() => _isLoading = true);
 
     final result = await _clientService.createClient(
@@ -225,19 +296,83 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _buildSection(
                   title: 'Credenciales de Acceso',
                   children: [
-                    AppTextField(
-                      controller: _emailCtrl,
-                      label: 'Correo electrónico',
-                      hint: 'juan@email.com',
-                      prefixIcon: Icons.mail_outline_rounded,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Ingresa tu correo';
-                        if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v)) return 'Correo inválido';
-                        return null;
-                      },
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: AppTextField(
+                            controller: _emailCtrl,
+                            label: 'Correo electrónico',
+                            hint: 'juan@email.com',
+                            prefixIcon: Icons.mail_outline_rounded,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            enabled: !_codeSent,
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return 'Ingresa tu correo';
+                              if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v)) return 'Correo inválido';
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: SizedBox(
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: _codeSent || _sendingCode ? null : _sendVerificationCode,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _codeSent ? cs.surfaceContainerHighest : cs.primary,
+                                foregroundColor: _codeSent ? cs.onSurface.withOpacity(0.4) : cs.onPrimary,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                              ),
+                              child: _sendingCode
+                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : Text(_codeSent ? 'Enviado' : 'Verificar', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13)),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+                    if (_devCode != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: cs.outline.withOpacity(0.2)),
+                        ),
+                        child: Text(
+                          'DEV: $_devCode',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 13,
+                            color: cs.onSurface.withOpacity(0.6),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                    if (_codeSent) ...[
+                      const SizedBox(height: 16),
+                      AppTextField(
+                        controller: _codeCtrl,
+                        label: 'Código de verificación',
+                        hint: '000000',
+                        prefixIcon: Icons.verified_outlined,
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.next,
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Ingresa el código';
+                          if (v.trim().length != 6) return 'Debe tener 6 dígitos';
+                          return null;
+                        },
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     AppTextField(
                       controller: _passwordCtrl,
