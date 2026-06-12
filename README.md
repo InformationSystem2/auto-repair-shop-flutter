@@ -161,7 +161,7 @@ El rastreo de ubicación del técnico requiere permisos explícitos del sistema 
 ## Equipo
 
 | Integrante |
-|---|---|
+|---|
 | **Evert Rodríguez Araúz** | 
 | **Rojas Rivero Douglas Ismael** |
 
