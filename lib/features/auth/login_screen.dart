@@ -262,26 +262,41 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildFooter(ColorScheme cs) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Column(
       children: [
-        Text(
-          '¿No tienes cuenta? ',
-          style: GoogleFonts.inter(
-            color: cs.onSurface.withOpacity(0.55),
-            fontSize: 14,
-          ),
-        ),
         GestureDetector(
-          onTap: () => Navigator.of(context).pushNamed('/register'),
+          onTap: () => Navigator.of(context).pushNamed('/forgot-password'),
           child: Text(
-            'Regístrate',
+            '¿Olvidaste tu contraseña?',
             style: GoogleFonts.inter(
-              color: cs.primary,
-              fontWeight: FontWeight.w700,
+              color: cs.onSurface.withOpacity(0.55),
               fontSize: 14,
             ),
           ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '¿No tienes cuenta? ',
+              style: GoogleFonts.inter(
+                color: cs.onSurface.withOpacity(0.55),
+                fontSize: 14,
+              ),
+            ),
+            GestureDetector(
+              onTap: () => Navigator.of(context).pushNamed('/register'),
+              child: Text(
+                'Regístrate',
+                style: GoogleFonts.inter(
+                  color: cs.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

@@ -17,6 +17,10 @@ class AppConfig {
   static String get incidentsEndpoint => '/api/incidents';
   static String get uploadEvidenceEndpoint => '/api/incidents/upload-evidence';
   static String get fcmTokenEndpoint => '/api/auth/fcm-token';
+  static String get forgotPasswordEndpoint => '/api/auth/public/forgot-password';
+  static String get resetPasswordEndpoint => '/api/auth/public/reset-password';
+  static String get sendVerificationCodeEndpoint => '/api/auth/public/send-verification-code';
+  static String get verifyCodeEndpoint => '/api/auth/public/verify-code';
   static String get ratingsEndpoint => '/api/ratings';
   static String get paymentsEndpoint => '/api/payments';
   static String get notificationsEndpoint => '/api/notifications';

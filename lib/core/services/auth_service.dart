@@ -110,4 +110,74 @@ class AuthService {
       return e.message ?? 'Error de conexión';
     }
   }
+
+  Future<({bool success, String message, String? code})> forgotPassword(
+      String email) async {
+    try {
+      final response = await _dio.post(
+        AppConfig.forgotPasswordEndpoint,
+        data: {'email': email},
+      );
+      final msg = (response.data as Map)['message'] as String? ?? '';
+      final code = (response.data as Map)['code'] as String?;
+      return (success: true, message: msg, code: code);
+    } on DioException catch (e) {
+      return (success: false, message: _extractError(e), code: null);
+    } catch (e) {
+      return (success: false, message: 'Error: $e', code: null);
+    }
+  }
+
+  Future<({bool success, String message})> resetPassword(
+      String email, String code, String newPassword) async {
+    try {
+      final response = await _dio.post(
+        AppConfig.resetPasswordEndpoint,
+        data: {
+          'email': email,
+          'code': code,
+          'new_password': newPassword,
+        },
+      );
+      final msg = (response.data as Map)['message'] as String? ?? '';
+      return (success: true, message: msg);
+    } on DioException catch (e) {
+      return (success: false, message: _extractError(e));
+    } catch (e) {
+      return (success: false, message: 'Error: $e');
+    }
+  }
+
+  Future<({bool success, String message, String? code})> sendVerificationCode(
+      String email) async {
+    try {
+      final response = await _dio.post(
+        AppConfig.sendVerificationCodeEndpoint,
+        data: {'email': email},
+      );
+      final msg = (response.data as Map)['message'] as String? ?? '';
+      final code = (response.data as Map)['code'] as String?;
+      return (success: true, message: msg, code: code);
+    } on DioException catch (e) {
+      return (success: false, message: _extractError(e), code: null);
+    } catch (e) {
+      return (success: false, message: 'Error: $e', code: null);
+    }
+  }
+
+  Future<({bool success, String message})> verifyCode(
+      String email, String code) async {
+    try {
+      final response = await _dio.post(
+        AppConfig.verifyCodeEndpoint,
+        data: {'email': email, 'code': code},
+      );
+      final msg = (response.data as Map)['message'] as String? ?? '';
+      return (success: true, message: msg);
+    } on DioException catch (e) {
+      return (success: false, message: _extractError(e));
+    } catch (e) {
+      return (success: false, message: 'Error: $e');
+    }
+  }
 }
