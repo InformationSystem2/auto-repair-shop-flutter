@@ -56,16 +56,24 @@ class _TechnicianDashboardScreenState extends State<TechnicianDashboardScreen> {
       _loading = true;
       _error = null;
     });
-    final result = await _dashboardService.getTechnicianStats();
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      if (result.success) {
-        _stats = result.data;
-      } else {
-        _error = result.message;
-      }
-    });
+    try {
+      final result = await _dashboardService.getTechnicianStats();
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        if (result.success) {
+          _stats = result.data;
+        } else {
+          _error = result.message;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Error inesperado al cargar estadísticas: $e';
+      });
+    }
   }
 
   Future<void> _toggleSharing(String incidentId) async {
