@@ -150,6 +150,14 @@ class DashboardService {
         message: _extractError(e),
         data: null,
       );
+    } catch (e, stack) {
+      print('Error parsing technician stats: $e');
+      print(stack);
+      return (
+        success: false,
+        message: 'Error de formato de datos: $e',
+        data: null,
+      );
     }
   }
 

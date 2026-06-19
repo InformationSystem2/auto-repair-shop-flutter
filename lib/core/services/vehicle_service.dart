@@ -11,7 +11,7 @@ class VehicleService {
       getMyVehicles() async {
     try {
       final response =
-          await _dio.get('${AppConfig.vehiclesEndpoint}/');
+          await _dio.get('${AppConfig.vehiclesEndpoint}/my');
       final list = (response.data as List<dynamic>)
           .map((e) => Vehicle.fromJson(e as Map<String, dynamic>))
           .toList();

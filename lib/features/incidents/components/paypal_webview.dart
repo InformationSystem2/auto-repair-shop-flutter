@@ -24,6 +24,21 @@ class PaypalWebView extends StatefulWidget {
 class _PaypalWebViewState extends State<PaypalWebView> {
   late final WebViewController _controller;
   bool _isLoading = true;
+  bool _callbackTriggered = false;
+
+  void _triggerSuccess() {
+    if (_callbackTriggered) return;
+    _callbackTriggered = true;
+    widget.onSuccess();
+    Navigator.of(context).pop();
+  }
+
+  void _triggerCancel() {
+    if (_callbackTriggered) return;
+    _callbackTriggered = true;
+    widget.onCancel();
+    Navigator.of(context).pop();
+  }
 
   @override
   void initState() {
@@ -40,25 +55,21 @@ class _PaypalWebViewState extends State<PaypalWebView> {
             
             // Si llegamos a la URL de éxito, disparamos el callback y cerramos
             if (url.startsWith(widget.returnUrl)) {
-              widget.onSuccess();
-              Navigator.of(context).pop();
+              _triggerSuccess();
             }
             
             // Si llegamos a la URL de cancelación
             if (url.startsWith(widget.cancelUrl)) {
-              widget.onCancel();
-              Navigator.of(context).pop();
+              _triggerCancel();
             }
           },
           onNavigationRequest: (request) {
             if (request.url.startsWith(widget.returnUrl)) {
-              widget.onSuccess();
-              Navigator.of(context).pop();
+              _triggerSuccess();
               return NavigationDecision.prevent;
             }
             if (request.url.startsWith(widget.cancelUrl)) {
-              widget.onCancel();
-              Navigator.of(context).pop();
+              _triggerCancel();
               return NavigationDecision.prevent;
             }
             return NavigationDecision.navigate;
@@ -77,8 +88,7 @@ class _PaypalWebViewState extends State<PaypalWebView> {
           icon: const Icon(Icons.close),
           onPressed: () {
             // Cerrar manualmente = cancelar el pago (no se marca como pagado)
-            widget.onCancel();
-            Navigator.of(context).pop();
+            _triggerCancel();
           },
         ),
       ),
