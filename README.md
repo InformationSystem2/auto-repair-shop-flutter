@@ -6,7 +6,8 @@
 
 | Recurso | Enlace |
 |---|---|
-| Repositorio público | https://github.com/evert-aov/SI2-ARS-mobile |
+| Repositorio público | https://github.com/InformationSystem2/auto-repair-shop-flutter |
+| Aplicacion apk | https://github.com/InformationSystem2/auto-repair-shop-flutter/blob/main/auxilio-mecanico.apk |
 
 ---
 
@@ -159,11 +160,10 @@ El rastreo de ubicación del técnico requiere permisos explícitos del sistema 
 
 ## Equipo
 
-| Integrante | Rol |
-|---|---|
-| **Evert Rodríguez Araúz** | Backend Developer / Arquitecto de Software |
-| *[Integrante 2]* | *[Rol]* |
-| *[Integrante 3]* | *[Rol]* |
+| Integrante |
+|---|
+| **Evert Rodríguez Araúz** | 
+| **Rojas Rivero Douglas Ismael** |
 
 ---
 
